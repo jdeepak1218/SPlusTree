@@ -59,3 +59,29 @@ other compiler/platform combinations have not been tested in this stage.
 
 The optimized port additionally passed a standalone-header, repeated-inclusion, and
 two-translation-unit compilation/link/run check with GCC 13.3.
+
+## Scalar S+ tree
+
+```bash
+g++ -std=c++20 -O2 -D_GLIBCXX_ASSERTIONS -Wall -Wextra -Wpedantic -Wconversion -Iinclude tests/stree_test.cpp -o build/stree_test
+./build/stree_test
+g++ -std=c++20 -O3 -DNDEBUG -Wall -Wextra -Wpedantic -Wconversion -Iinclude tests/stree_test.cpp -o build/stree_test_release
+./build/stree_test_release
+g++ -std=c++20 -O1 -g -D_GLIBCXX_ASSERTIONS -fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer -Iinclude tests/stree_test.cpp -o build/stree_test_sanitized
+ASAN_OPTIONS=detect_leaks=0 ./build/stree_test_sanitized
+```
+
+The scalar suite checks 4,657,931 queries across 3,697 datasets, using node widths
+2 and 16. It includes every length from zero through 1,025, exhaustive sorted
+small-alphabet inputs through length ten, capacities near fanout powers, 500
+randomized distributions, full-range keys, maximum-only input, duplicate runs,
+and arrays with 1,000,003 and 8,388,731 keys. Explicit failure checks survive
+`-DNDEBUG`. Unsorted input, leaf spill, first duplicates, source ownership,
+copying, moving, and assignment are checked separately.
+
+Temporary changes to equality comparison, separator selection, and leaf spill
+were each detected by the suite. A standalone-header, repeated-inclusion, and
+two-translation-unit check also passed, including a cross-leaf query. No temporary
+mutants are retained. Sanitizer success is evidence for tested executions, not
+proof of correctness for all inputs. Leak detection remains unavailable here;
+allocation failure, concurrency, and other platforms remain untested.

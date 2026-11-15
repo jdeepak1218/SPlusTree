@@ -5,13 +5,10 @@ From the project root, compile the benchmark independently of sanitizer builds:
 ```bash
 mkdir -p build
 g++ -std=c++20 -O3 -DNDEBUG -Wall -Wextra -Wpedantic -Wconversion -Iinclude benchmarks/search_benchmark.cpp -o build/search_benchmark
-./build/search_benchmark uniform indices > benchmarks/optimized_uniform.csv
-./build/search_benchmark duplicates indices > benchmarks/optimized_duplicates.csv
-./build/search_benchmark equal indices > benchmarks/optimized_equal.csv
-./build/search_benchmark uniform indices > benchmarks/optimized_uniform_repeat.csv
-./build/search_benchmark uniform values > benchmarks/optimized_values_uniform.csv
-./build/search_benchmark duplicates values > benchmarks/optimized_values_duplicates.csv
-./build/search_benchmark equal values > benchmarks/optimized_values_equal.csv
+./build/search_benchmark uniform indices > benchmarks/stree_uniform.csv
+./build/search_benchmark duplicates indices > benchmarks/stree_duplicates.csv
+./build/search_benchmark equal indices > benchmarks/stree_equal.csv
+./build/search_benchmark uniform indices > benchmarks/stree_uniform_repeat.csv
 ```
 
 Run the commands sequentially on an otherwise idle machine. Correctness and
@@ -20,11 +17,12 @@ and the default result mode is `indices`.
 
 ## What is compared
 
-Index mode compares six methods: standard lower bound, binary search, original
+Index mode compares seven methods: standard lower bound, binary search, original
 candidate-tracking Eytzinger, the earlier two-hint/T2 experiment, the optimized
-T0-prefetched traversal, and that same optimized traversal without prefetching.
+T0-prefetched traversal, that same optimized traversal without prefetching, and a scalar S+ tree.
 All Eytzinger methods now use the same 64-byte-aligned key storage and position
-map. Comparing the two optimized methods isolates prefetching within that traversal.
+map. The S+ tree stores leaves and internal separators without a position map.
+Comparing the two optimized methods isolates prefetching within that traversal.
 The map is read once after the optimized traversal, preserving our index contract.
 
 Value mode separately compares standard lower bound returning a key/sentinel
@@ -37,15 +35,15 @@ results; their contracts differ.
 ## Measurement
 
 - One million independent queries per pass; fixed seed 42 for data and queries.
-- One full warm-up, then twelve measured trials per implementation.
-- Index-mode order rotates across six methods; each gets every execution
+- One full warm-up, then fourteen measured trials per implementation.
+- Index-mode order rotates across seven methods; each gets every execution
   position twice. Value-mode order alternates across two methods.
 - Timings include search and preallocated result-buffer writes. Generation,
   sorting, construction, allocation, result comparisons, and printing are outside
   the timed region. Every warm-up and trial output is compared element by element
   with the reference, even with `-DNDEBUG`.
 - Median is the mean of the middle two sorted timings. CSVs retain median,
-  minimum, maximum, and all twelve original trial timings in ns/query.
+  minimum, maximum, and all fourteen original trial timings in ns/query.
 - These are independent-query throughput measurements, not dependent-query latency.
 - Six uniform input sizes: 1,024; 65,536; 1,048,576; 8,388,608; 16,777,339;
   33,554,555 keys. Uniform keys and queries are 31-bit samples, matching the
@@ -53,14 +51,15 @@ results; their contracts differ.
 - Duplicate/equal modes use the 1,048,576 and 33,554,555 sizes. Duplicates have
   eight distinct values spanning almost the full unsigned range; equal keys are
   `0x80000000`. Half the queries are sampled hits; half are full-range random.
-- All seven commands execute 1,392 million measured searches and 116 million
+- The four commands execute 1,568 million measured searches and 112 million
   warm-up searches. The repeated uniform process checks whether conclusions
   persist across separate executions with identical generated data.
 
 `storage_bytes` reports vector buffer capacities: sorted keys for baselines,
-or aligned keys plus original-position map for Eytzinger. It excludes allocator
+aligned keys plus original-position map for Eytzinger, or aligned nodes and
+level offsets for S+ trees. It excludes allocator
 metadata, vector objects, queries, outputs, and temporary storage. The benchmark
-retains both representations as well as output buffers, so process memory is
+retains the input and both indexes as well as output buffers, so process memory is
 larger. Both optimized wrappers share the same storage. `build_ms` is one observation,
 including sorted-input validation and allocation, excluding sorting. It is not
 a repeated construction benchmark.
@@ -84,7 +83,8 @@ objdump -d build/search_benchmark | rg 'prefetcht0'
 units. Unsupported compilers also retain traversal without hints. Other compiler
 and architecture combinations have not been validated.
 
-Historical `baseline.csv`, `eytzinger*.csv`, and `prefetch*.csv` files retain
-older harness/layout results. Compare methods within the current `optimized*.csv`
-files: earlier files used different alignment, trial counts, and method sets.
+Historical `baseline.csv`, `eytzinger*.csv`, `prefetch*.csv`, and `optimized*.csv`
+files retain older harness/layout results. Compare methods within the current
+`stree*.csv` files: earlier files used different trial counts and method sets.
+The value mode remains available but does not yet include S+ tree searches.
 Upstream source links, license, and retrieved-file hashes are in `third_party/`.
