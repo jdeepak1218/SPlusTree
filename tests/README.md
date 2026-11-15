@@ -23,7 +23,7 @@ uses explicit failure checks that remain active even with `-DNDEBUG`.
 
 ## Coverage
 
-- The existing reference checks compare both Eytzinger methods as well.
+- The existing reference checks compare all Eytzinger methods as well.
 - All 286 sorted arrays of length zero through ten over `{0, 1, UINT32_MAX}`.
 - Lengths near powers of two through `2^17`, including incomplete last levels.
 - Every length from zero through 513, probing every key and adjacent values.
@@ -34,10 +34,14 @@ uses explicit failure checks that remain active even with `-DNDEBUG`.
   array with an extreme final key.
 - Queries for zero, maximum, the signed/unsigned boundary, random values, sampled
   exact keys, and their neighbors. Sampling includes large duplicate runs.
-- Binary search and both Eytzinger methods compared to `std::lower_bound`:
+- Binary search and all index-returning Eytzinger methods compared to `std::lower_bound`;
+  the value-returning blog method is checked against the corresponding reference key/sentinel:
   867,795 query cases across 1,391 datasets.
 - Four invalid unsorted arrays must throw `std::invalid_argument`.
 - Ownership after source mutation, copying, moving, and copy assignment.
+- The aligned allocator is checked at several allocation sizes.
+- Blog traversal is checked with and without prefetching; its value API is checked
+  alongside its original-position API.
 - The same suite passes with hints disabled and with `-DNDEBUG`; explicit
   differential checks do not depend on assertions.
 
@@ -52,3 +56,6 @@ detected. These temporary mutations are not present in the project.
 This coverage does not prove correctness for every possible input. Allocation
 failure injection, physically unallocatable lengths, concurrent execution, and
 other compiler/platform combinations have not been tested in this stage.
+
+The blog port additionally passed a standalone-header, repeated-inclusion, and
+two-translation-unit compilation/link/run check with GCC 13.3.

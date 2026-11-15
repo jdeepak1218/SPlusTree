@@ -30,6 +30,9 @@ void verify(const std::vector<std::uint32_t>& values, std::size_t samples = 100)
     const auto expected = sst::reference_lower_bound(values, query);
     if (tree.lower_bound(query) != expected
         || tree.lower_bound_prefetch(query) != expected
+        || tree.lower_bound_blog(query) != expected
+        || tree.lower_bound_blog_no_prefetch(query) != expected
+        || tree.search_value_blog(query) != (expected == values.size() ? max_key : values[expected])
         || sst::binary_lower_bound(values, query) != expected) {
       throw std::runtime_error("Mismatch: n=" + std::to_string(values.size())
                                + " query=" + std::to_string(query));
@@ -148,8 +151,18 @@ try {
   auto moved = std::move(copy);
   require(moved.lower_bound(5) == 1, "Move lost tree data");
   require(moved.lower_bound_prefetch(5) == 1, "Prefetch search lost moved data");
+  require(moved.lower_bound_blog(5) == 1 && moved.search_value_blog(5) == 5,
+          "Blog search lost moved data");
   copy = owned;
   require(copy.lower_bound(6) == 3, "Copy assignment lost tree data");
+
+  sst::detail::CacheAlignedAllocator<std::uint32_t> allocator;
+  for (const auto count : {1U, 16U, 17U, 1025U}) {
+    auto* allocation = allocator.allocate(count);
+    require(reinterpret_cast<std::uintptr_t>(allocation) % 64 == 0,
+            "Key allocator is not cache-line aligned");
+    allocator.deallocate(allocation, count);
+  }
 
   std::cout << "PASS: " << datasets << " datasets, " << lookups
             << " differential queries; invalid-input and ownership checks passed\n";

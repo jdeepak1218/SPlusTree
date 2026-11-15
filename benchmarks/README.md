@@ -1,87 +1,91 @@
 # Search benchmarks
 
-Run commands from the project root:
+From the project root, compile the benchmark independently of sanitizer builds:
 
 ```bash
 mkdir -p build
-g++ -std=c++20 -Wall -Wextra -Wpedantic -g -Iinclude tests/reference_test.cpp -o build/reference_test
-./build/reference_test
 g++ -std=c++20 -O3 -DNDEBUG -Wall -Wextra -Wpedantic -Wconversion -Iinclude benchmarks/search_benchmark.cpp -o build/search_benchmark
-./build/search_benchmark uniform > benchmarks/prefetch_uniform.csv
-./build/search_benchmark duplicates > benchmarks/prefetch_duplicates.csv
-./build/search_benchmark equal > benchmarks/prefetch_equal.csv
-./build/search_benchmark uniform > benchmarks/prefetch_uniform_repeat.csv
+./build/search_benchmark uniform indices > benchmarks/blog_uniform.csv
+./build/search_benchmark duplicates indices > benchmarks/blog_duplicates.csv
+./build/search_benchmark equal indices > benchmarks/blog_equal.csv
+./build/search_benchmark uniform indices > benchmarks/blog_uniform_repeat.csv
+./build/search_benchmark uniform values > benchmarks/blog_values_uniform.csv
+./build/search_benchmark duplicates values > benchmarks/blog_values_duplicates.csv
+./build/search_benchmark equal values > benchmarks/blog_values_equal.csv
 ```
 
-The header in `include/static_search_tree.hpp` currently contains only the
-standard-library reference and our binary-search baseline. `include/eytzinger.hpp`
-contains both plain Eytzinger search and four-level lookahead prefetch search.
-GCC/Clang use `__builtin_prefetch`; other compilers use the same traversal
-without hints. Define `SST_DISABLE_PREFETCH` consistently across translation
-units to disable hints explicitly.
+Run the commands sequentially on an otherwise idle machine. Correctness and
+sanitizer commands are in `tests/README.md`. The default workload is `uniform`
+and the default result mode is `indices`.
 
-## Workload and measurement
+## What is compared
 
-- Six input sizes from 1,024 to 33,554,555 keys (about 128 MiB of keys at the
-  largest size). The two largest sizes are deliberately not powers of two.
-- Sorted uniformly sampled 31-bit unsigned keys, with duplicates allowed, and
-  independent uniformly sampled queries. This follows the blog's initial data
-  distribution; correctness tests separately cover full-range unsigned values.
-- Fixed seed `42` for each dataset. Reproduction of the random sequence assumes
-  the same standard-library implementation.
-- One million queries per pass, using the same data and queries for all searches.
-- One full warm-up per implementation, followed by eight measured trials each.
-  Execution order rotates across four implementations, giving each every
-  execution position twice. The median is the mean of the middle two timings.
-- Timings include search and writing each result to preallocated output storage.
-  Generation, sorting, allocation, validation, and CSV printing are outside the
-  measured region.
-- Every trial's outputs are compared element by element, even with `-DNDEBUG`.
-  A final checksum is printed for each implementation.
-- CSV records median, minimum, maximum, and all eight raw trial timings in
-  nanoseconds per query. These measure
-  independent-query throughput, not dependent single-query latency.
+Index mode compares six methods: standard lower bound, binary search, original
+candidate-tracking Eytzinger, the earlier two-hint/T2 experiment, the blog-style
+T0-prefetched traversal, and that same blog traversal without prefetching.
+All Eytzinger methods now use the same 64-byte-aligned key storage and position
+map. Comparing the two blog methods isolates prefetching within that traversal.
+The map is read once after the blog traversal, preserving our index contract.
 
-The uniform run executes 192 million measured searches and 24 million warm-up
-searches. The `duplicates` and `equal` runs each use the 1,048,576 and 33,554,555
-key sizes with the same query counts and trial counts. Duplicate input contains
-eight key clusters spanning almost the full unsigned range. Equal input contains
-only `0x80000000`. For these stress workloads, half the queries are sampled
-exact hits and half are full-range random queries. Each separate CSV filename
-identifies its workload. Each stress run executes 64 million measured searches
-and eight million warm-up searches. Repeating the uniform run gives a total of
-512 million measured searches and 64 million warm-up searches across the four
-commands above. Run these commands sequentially; parallel timing runs compete
-for CPU and memory resources. More repetitions help expose variation; they do not remove systematic
-bias or make a workload representative of every application.
+Value mode separately compares standard lower bound returning a key/sentinel
+with the blog-style value-returning operation. This mode does not read the
+position map during queries, though the object still retains it for index-mode
+support. Outputs are stored in the same `size_t` buffers for both methods.
+Do not compare value-mode checksums or timings as though they were index-mode
+results; their contracts differ.
 
-## Recorded baseline environment
+## Measurement
 
-`baseline.csv` was generated on 2026-11-15 with:
+- One million independent queries per pass; fixed seed 42 for data and queries.
+- One full warm-up, then twelve measured trials per implementation.
+- Index-mode order rotates across six methods; each gets every execution
+  position twice. Value-mode order alternates across two methods.
+- Timings include search and preallocated result-buffer writes. Generation,
+  sorting, construction, allocation, result comparisons, and printing are outside
+  the timed region. Every warm-up and trial output is compared element by element
+  with the reference, even with `-DNDEBUG`.
+- Median is the mean of the middle two sorted timings. CSVs retain median,
+  minimum, maximum, and all twelve original trial timings in ns/query.
+- These are independent-query throughput measurements, not dependent-query latency.
+- Six uniform input sizes: 1,024; 65,536; 1,048,576; 8,388,608; 16,777,339;
+  33,554,555 keys. Uniform keys and queries are 31-bit samples, matching the
+  blog's starting distribution. Full-range values are covered in correctness tests.
+- Duplicate/equal modes use the 1,048,576 and 33,554,555 sizes. Duplicates have
+  eight distinct values spanning almost the full unsigned range; equal keys are
+  `0x80000000`. Half the queries are sampled hits; half are full-range random.
+- All seven commands execute 1,392 million measured searches and 116 million
+  warm-up searches. The repeated uniform process checks whether conclusions
+  persist across separate executions with identical generated data.
 
-- GCC 13.3.0, Ubuntu package `13.3.0-6ubuntu2~24.04.1`.
-- Flags: `-std=c++20 -O3 -DNDEBUG -Wall -Wextra -Wpedantic -Iinclude`.
-- Reported CPU: Intel Core i7-12700H, x86-64.
-- Microsoft hypervisor, with two logical CPUs visible to this environment.
-- Reported caches: 48 KiB L1 data, 1.3 MiB L2, 24 MiB L3.
+`storage_bytes` reports vector buffer capacities: sorted keys for baselines,
+or aligned keys plus original-position map for Eytzinger. It excludes allocator
+metadata, vector objects, queries, outputs, and temporary storage. The benchmark
+retains both representations as well as output buffers, so process memory is
+larger. Both blog wrappers share the same storage. `build_ms` is one observation,
+including sorted-input validation and allocation, excluding sorting. It is not
+a repeated construction benchmark.
 
-No CPU affinity, fixed frequency, explicit huge-page allocation, or cold-cache
-flushing is configured. Run on an otherwise idle machine and retain the timing
-spread when comparing results. Virtualization and host activity can affect these
-measurements. Data size is the key storage size, not total process memory.
+## Reproduction limits
 
-The current timing helper is templated so all four search callables can be
-inlined. The old `baseline.csv` used a function-pointer helper. The older
-`eytzinger*.csv` files used three methods and seven trials. Compare implementations
-within the current `prefetch*.csv` files, rather than comparing different harness
-versions. These timings do not isolate individual instruction costs.
+Recorded runs use GCC 13.3.0 on x86-64 WSL2, reported i7-12700H, two visible logical
+CPUs, and previously reported 48 KiB L1 data, 1.3 MiB L2, and 24 MiB L3 caches.
+There is no CPU affinity, fixed frequency, explicit huge-page allocation, or
+cold-cache flushing. Transparent huge pages are not requested or verified.
+This is a C++ port of the traversal, not a recreation of the blog's full machine
+and allocation setup. Host activity and virtualization can change timings.
 
-`storage_bytes` reports the vector buffer capacities required by each search:
-the sorted input for the baselines, or Eytzinger's keys plus sorted-position map.
-It excludes allocator metadata and query/result buffers. The benchmark retains
-the sorted input as a correctness oracle, so its process memory is larger.
-Eytzinger uses approximately three times the key-only storage on this 64-bit
-platform. Its mapping preserves original sorted indices, which differs from
-the blog's value-returning lookup. `build_ms` is one construction measurement,
-including sorted-input validation and allocation, and excludes input sorting;
-it is not a repeated construction benchmark. Baselines have no extra build step.
+The key buffer is explicitly aligned to 64 bytes. The blog prefetch path emits
+T0 hints on the tested GCC x86-64 build; confirm with:
+
+```bash
+objdump -d build/search_benchmark | rg 'prefetcht0'
+```
+
+`SST_DISABLE_PREFETCH` disables hints and must be consistent across translation
+units. Unsupported compilers also retain traversal without hints. Other compiler
+and architecture combinations have not been validated.
+
+Historical `baseline.csv`, `eytzinger*.csv`, and `prefetch*.csv` files retain
+older harness/layout results. Compare methods within the current `blog*.csv`
+files: earlier files used different alignment, trial counts, and method sets.
+Upstream source links, license, and retrieved-file hashes are in `third_party/`.
