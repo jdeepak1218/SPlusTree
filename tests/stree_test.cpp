@@ -25,10 +25,12 @@ void verify(const std::vector<std::uint32_t>& values, std::size_t samples = 128)
   const auto check = [&](std::uint32_t q) {
     const auto expected = sst::reference_lower_bound(values, q);
     const auto actual = tree.lower_bound(q);
-    if (expected != actual) {
+    const auto counted = tree.lower_bound_count(q);
+    if (expected != actual || counted != expected) {
       throw std::runtime_error("Mismatch: B=" + std::to_string(B)
           + " n=" + std::to_string(values.size()) + " query=" + std::to_string(q)
-          + " expected=" + std::to_string(expected) + " actual=" + std::to_string(actual));
+          + " expected=" + std::to_string(expected) + " early=" + std::to_string(actual)
+          + " count=" + std::to_string(counted));
     }
     ++queries;
   };
@@ -103,6 +105,19 @@ try {
     verify<16>(values);
   }
 
+  // Non-power-of-two widths exercise vector-loop tails and small reductions.
+  for (const auto n : {0U, 1U, 2U, 3U, 7U, 8U, 15U, 16U, 17U, 31U, 32U, 33U, 255U, 256U, 257U, 1025U}) {
+    values.resize(n);
+    for (auto& value : values) value = static_cast<std::uint32_t>(generator());
+    std::sort(values.begin(), values.end());
+    if (!values.empty()) { values.front() = 0; values.back() = maximum; }
+    verify<1>(values);
+    verify<3>(values);
+    verify<7>(values);
+    verify<8>(values);
+    verify<15>(values);
+  }
+
   values.resize(1'000'003);
   for (auto& value : values) value = static_cast<std::uint32_t>(generator());
   std::sort(values.begin(), values.end());
@@ -125,12 +140,16 @@ try {
   const sst::STree<2> example({2, 5, 8, 11, 14, 17});
   require(example.lower_bound(8) == 2, "Leaf spill failed");
   require(example.lower_bound(14) == 4, "Leaf spill failed");
+  require(example.lower_bound_count(8) == 2 && example.lower_bound_count(14) == 4,
+          "Counting leaf spill failed");
   const sst::STree<2> duplicates({2, 5, 5, 5, 5, 9, 14, 17});
   require(duplicates.lower_bound(5) == 1, "First duplicate lost");
+  require(duplicates.lower_bound_count(5) == 1, "Counting first duplicate lost");
   values = {2, 5, 5, 9};
   const sst::STree<> owned(values);
   values.assign(100, 0);
   require(owned.lower_bound(5) == 1, "Source mutation changed tree");
+  require(owned.lower_bound_count(5) == 1, "Source mutation changed counting search");
   auto copy = owned;
   auto moved = std::move(copy);
   require(moved.lower_bound(6) == 3, "Move lost data");

@@ -88,3 +88,43 @@ files retain older harness/layout results. Compare methods within the current
 `stree*.csv` files: earlier files used different trial counts and method sets.
 The value mode remains available but does not yet include S+ tree searches.
 Upstream source links, license, and retrieved-file hashes are in `third_party/`.
+
+## Counting and auto-vectorization comparison
+
+This focused mode compares standard lower bound, optimized Eytzinger, early-exit
+S+ search, and counting S+ search. It uses the same tree for both S+ methods,
+with no additional persistent storage. Twelve trials rotate four methods so
+each gets every execution position three times. All outputs are checked against
+the standard reference outside timed regions. Existing `indices` and `values`
+modes retain their fourteen-trial behavior.
+
+Build three executables with the same base options:
+
+```bash
+g++ -std=c++20 -O3 -DNDEBUG -Wall -Wextra -Wpedantic -Wconversion -Iinclude benchmarks/search_benchmark.cpp -o build/search_benchmark
+g++ -std=c++20 -O3 -mavx2 -DNDEBUG -Wall -Wextra -Wpedantic -Wconversion -Iinclude benchmarks/search_benchmark.cpp -o build/search_benchmark_avx2
+g++ -std=c++20 -O3 -DNDEBUG -fno-tree-loop-vectorize -fno-tree-slp-vectorize -Wall -Wextra -Wpedantic -Wconversion -Iinclude benchmarks/search_benchmark.cpp -o build/search_benchmark_no_vector
+./build/search_benchmark uniform counting > benchmarks/count_generic_uniform.csv
+./build/search_benchmark duplicates counting > benchmarks/count_generic_duplicates.csv
+./build/search_benchmark equal counting > benchmarks/count_generic_equal.csv
+./build/search_benchmark_avx2 uniform counting > benchmarks/count_avx2_uniform.csv
+./build/search_benchmark_avx2 duplicates counting > benchmarks/count_avx2_duplicates.csv
+./build/search_benchmark_avx2 equal counting > benchmarks/count_avx2_equal.csv
+./build/search_benchmark_avx2 uniform counting > benchmarks/count_avx2_uniform_repeat.csv
+./build/search_benchmark_no_vector uniform counting > benchmarks/count_no_vector_uniform.csv
+```
+
+Execute AVX2 binaries only on an AVX2-capable CPU/OS. Support was checked on the
+recorded machine. Commands run sequentially: 1,536 million measured searches
+and 128 million warm-up searches in total. Generic and AVX2 workloads both cover
+uniform, duplicate-heavy, and all-equal input. The AVX2 uniform workload repeats
+in a separate process. The vectorization-disabled control uses uniform input.
+Each build applies its flags to all methods, so comparisons across builds also
+include other compiler-code-generation changes and separate-process variation.
+Within-build early/count comparisons are the primary performance evidence.
+
+Compiler diagnostics and assembly checks are described in
+`docs/stree-counting.md`; detailed timing tables are in `docs/count-results.md`.
+The counting loop uses no SIMD intrinsics. GCC's unrolling hint allows its
+vectorizer to see reductions in both internal nodes and leaves. No runtime ISA
+dispatch is added. Other compilers may choose different code generation.

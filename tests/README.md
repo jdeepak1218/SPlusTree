@@ -71,7 +71,7 @@ g++ -std=c++20 -O1 -g -D_GLIBCXX_ASSERTIONS -fsanitize=address,undefined -fno-sa
 ASAN_OPTIONS=detect_leaks=0 ./build/stree_test_sanitized
 ```
 
-The scalar suite checks 4,657,931 queries across 3,697 datasets, using node widths
+The initial scalar suite checked 4,657,931 queries across 3,697 datasets, using node widths
 2 and 16. It includes every length from zero through 1,025, exhaustive sorted
 small-alphabet inputs through length ten, capacities near fanout powers, 500
 randomized distributions, full-range keys, maximum-only input, duplicate runs,
@@ -85,3 +85,24 @@ two-translation-unit check also passed, including a cross-leaf query. No tempora
 mutants are retained. Sanitizer success is evidence for tested executions, not
 proof of correctness for all inputs. Leak detection remains unavailable here;
 allocation failure, concurrency, and other platforms remain untested.
+
+## Counting search
+
+The current suite checks both early-exit and counting search: 4,697,951 query
+cases across 3,777 datasets. Additional widths 1, 3, 7, 8, and 15 exercise small
+reductions and vector tails alongside the existing widths 2 and 16. Generic,
+AVX2, vectorization-disabled, and ASan/UBSan builds pass on the tested machine.
+CPU AVX2 support was checked before executing AVX2 binaries.
+
+```bash
+g++ -std=c++20 -O3 -mavx2 -DNDEBUG -Wall -Wextra -Wpedantic -Wconversion -Iinclude tests/stree_test.cpp -o build/stree_test_avx2
+./build/stree_test_avx2
+g++ -std=c++20 -O3 -DNDEBUG -fno-tree-loop-vectorize -fno-tree-slp-vectorize -Iinclude tests/stree_test.cpp -o build/stree_test_no_vector
+./build/stree_test_no_vector
+```
+
+For an AVX2 sanitizer build, add `-mavx2` to the sanitizer command above.
+Three temporary counting mutations were detected: using `<=`, comparing keys
+as signed integers, and overwriting rather than accumulating the count. Header
+integration checks pass with the new method. The code-generation probe and
+inspection instructions are in `docs/stree-counting.md`.

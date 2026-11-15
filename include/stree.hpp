@@ -85,6 +85,19 @@ public:
     return std::min(n, node * KeysPerNode + slot);
   }
 
+  std::size_t lower_bound_count(std::uint32_t query) const noexcept
+  {
+    const auto n = size();
+    if (n == 0) return 0;
+    std::size_t node = 0;
+    for (std::size_t level = 0; level + 1 < offsets_.size(); ++level) {
+      const auto child = find_count(nodes_[offsets_[level] + node], query);
+      node = node * fanout + child;
+    }
+    const auto slot = find_count(nodes_[offsets_.back() + node], query);
+    return std::min(n, node * KeysPerNode + slot);
+  }
+
 private:
   std::size_t size_ = 0;
   std::vector<Node> nodes_;
@@ -101,6 +114,20 @@ private:
       if (node.keys[i] >= query) return i;
     }
     return KeysPerNode;
+  }
+
+  static std::size_t find_count(const Node& node, std::uint32_t query) noexcept
+  {
+    // Fixed-length reduction permits auto-vectorization; the count is <= 16.
+    std::uint32_t count = 0;
+#if defined(__GNUC__) && !defined(__clang__)
+    // Preserve the loop for vectorization before GCC's early scalar unrolling.
+#pragma GCC unroll 1
+#endif
+    for (std::size_t i = 0; i < KeysPerNode; ++i) {
+      count += static_cast<std::uint32_t>(node.keys[i] < query);
+    }
+    return count;
   }
 };
 
