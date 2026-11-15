@@ -1,23 +1,25 @@
 #include "static_search_tree.hpp"
+#include "eytzinger.hpp"
 
 #include <array>
 #include <chrono>
 #include <iomanip>
 #include <iostream>
 #include <random>
+#include <string_view>
 
 namespace {
-using Search = std::size_t (*)(const std::vector<std::uint32_t>&, std::uint32_t);
 constexpr std::size_t query_count = 1'000'000;
 constexpr std::size_t trials = 7;
 
-double measure(Search search, const std::vector<std::uint32_t>& values,
+template<class Search>
+double measure(const Search& search,
                const std::vector<std::uint32_t>& queries,
                std::vector<std::size_t>& output)
 {
   const auto start = std::chrono::steady_clock::now();
   for (std::size_t i = 0; i < queries.size(); ++i) {
-    output[i] = search(values, queries[i]);
+    output[i] = search(queries[i]);
   }
   const auto stop = std::chrono::steady_clock::now();
   return std::chrono::duration<double, std::nano>(stop - start).count()
@@ -25,7 +27,8 @@ double measure(Search search, const std::vector<std::uint32_t>& values,
 }
 
 void report(std::size_t n, const char* name, std::array<double, trials> times,
-            const std::vector<std::size_t>& output)
+            const std::vector<std::size_t>& output, std::size_t storage_bytes,
+            double build_ms)
 {
   std::sort(times.begin(), times.end());
   std::uint64_t checksum = 0;
@@ -34,59 +37,95 @@ void report(std::size_t n, const char* name, std::array<double, trials> times,
   }
   std::cout << n << ',' << n * sizeof(std::uint32_t) << ',' << name << ','
             << query_count << ',' << trials << ',' << times[trials / 2] << ','
-            << times.front() << ',' << times.back() << ',' << checksum
+            << times.front() << ',' << times.back() << ',' << checksum << ','
+            << storage_bytes << ',' << build_ms
             << std::endl;
 }
 } // namespace
 
-int main()
+int main(int argc, char** argv)
 {
+  const std::string_view workload = argc == 2 ? argv[1] : "uniform";
+  if (argc > 2 || (workload != "uniform" && workload != "duplicates"
+                   && workload != "equal")) {
+    std::cerr << "Usage: search_benchmark [uniform|duplicates|equal]\n";
+    return 1;
+  }
   constexpr std::array<std::size_t, 6> sizes{
       1'024, 65'536, 1'048'576, 8'388'608, 16'777'216 + 123, 33'554'432 + 123
   };
   std::cout << "elements,input_bytes,implementation,queries,trials,median_ns_per_query,"
-               "min_ns_per_query,max_ns_per_query,checksum\n";
+               "min_ns_per_query,max_ns_per_query,checksum,storage_bytes,build_ms\n";
   std::cout << std::fixed << std::setprecision(3);
 
   for (const auto n : sizes) {
+    // Stress distributions at one smaller and one RAM-sized input.
+    if (workload != "uniform" && n != sizes[2] && n != sizes[5]) continue;
     std::mt19937 generator(42);
     std::uniform_int_distribution<std::uint32_t> distribution(0, 0x7fffffffU);
     std::vector<std::uint32_t> values(n);
     for (auto& value : values) {
-      value = distribution(generator);
+      if (workload == "uniform") {
+        value = distribution(generator);
+      } else if (workload == "duplicates") {
+        // Eight clusters including values on both sides of the signed boundary.
+        value = static_cast<std::uint32_t>(generator() % 8) * 0x24924924U;
+      } else {
+        value = 0x80000000U;
+      }
     }
     std::sort(values.begin(), values.end());
     std::vector<std::uint32_t> queries(query_count);
-    for (auto& query : queries) {
-      query = distribution(generator);
+    for (std::size_t i = 0; i < queries.size(); ++i) {
+      if (workload == "uniform") {
+        queries[i] = distribution(generator);
+      } else {
+        // Half exact hits, half full-range queries (including above the data).
+        queries[i] = i % 2 == 0 ? values[generator() % n]
+                                : static_cast<std::uint32_t>(generator());
+      }
     }
-    std::vector<std::size_t> reference(query_count), binary(query_count);
+    const auto build_start = std::chrono::steady_clock::now();
+    const sst::Eytzinger tree(values);
+    const double build_ms = std::chrono::duration<double, std::milli>(
+        std::chrono::steady_clock::now() - build_start).count();
+    const auto reference_search = [&](std::uint32_t q) {
+      return sst::reference_lower_bound(values, q);
+    };
+    const auto binary_search = [&](std::uint32_t q) {
+      return sst::binary_lower_bound(values, q);
+    };
+    const auto tree_search = [&](std::uint32_t q) { return tree.lower_bound(q); };
+    std::vector<std::size_t> reference(query_count), binary(query_count), layout(query_count);
 
     // Full untimed warm-up and element-by-element correctness check.
-    measure(sst::reference_lower_bound, values, queries, reference);
-    measure(sst::binary_lower_bound, values, queries, binary);
-    if (reference != binary) {
+    measure(reference_search, queries, reference);
+    measure(binary_search, queries, binary);
+    measure(tree_search, queries, layout);
+    if (reference != binary || reference != layout) {
       std::cerr << "Warm-up results differ for " << n << " elements\n";
       return 1;
     }
 
-    std::array<double, trials> reference_times{}, binary_times{};
+    std::array<double, trials> reference_times{}, binary_times{}, tree_times{};
     for (std::size_t trial = 0; trial < trials; ++trial) {
-      // Alternate order to reduce systematic first/second-run bias.
-      if (trial % 2 == 0) {
-        reference_times[trial] = measure(sst::reference_lower_bound, values, queries, reference);
-        binary_times[trial] = measure(sst::binary_lower_bound, values, queries, binary);
-      } else {
-        binary_times[trial] = measure(sst::binary_lower_bound, values, queries, binary);
-        reference_times[trial] = measure(sst::reference_lower_bound, values, queries, reference);
+      // Rotate which implementation runs first, second, and third.
+      for (std::size_t offset = 0; offset < 3; ++offset) {
+        switch ((trial + offset) % 3) {
+          case 0: reference_times[trial] = measure(reference_search, queries, reference); break;
+          case 1: binary_times[trial] = measure(binary_search, queries, binary); break;
+          case 2: tree_times[trial] = measure(tree_search, queries, layout); break;
+        }
       }
       // Consume and validate every trial's output outside the timed region.
-      if (reference != binary) {
+      if (reference != binary || reference != layout) {
         std::cerr << "Measured results differ for " << n << " elements\n";
         return 1;
       }
     }
-    report(n, "std_lower_bound", reference_times, reference);
-    report(n, "binary_lower_bound", binary_times, binary);
+    const auto input_storage = values.capacity() * sizeof(std::uint32_t);
+    report(n, "std_lower_bound", reference_times, reference, input_storage, 0);
+    report(n, "binary_lower_bound", binary_times, binary, input_storage, 0);
+    report(n, "eytzinger", tree_times, layout, tree.storage_bytes(), build_ms);
   }
 }

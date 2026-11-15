@@ -9,8 +9,12 @@ optimized search implementation must share.
 - Input keys must be sorted in nondecreasing order.
 - Duplicate keys and empty input are allowed.
 - The full unsigned 32-bit range is valid, including `0` and `UINT32_MAX`.
-- Sorted input is a precondition. How tree construction validates it will be
-  decided when construction is implemented.
+- Sorted input is a precondition.
+
+The Eytzinger implementation checks this precondition during construction and
+throws `std::invalid_argument` for unsorted input. Its queries do not repeat
+the validation. The standalone binary-search baselines require sorted input
+and do not validate it.
 
 ## Search result
 
