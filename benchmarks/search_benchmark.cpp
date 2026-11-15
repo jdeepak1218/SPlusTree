@@ -100,24 +100,24 @@ int main(int argc, char** argv)
         const auto index = sst::reference_lower_bound(values, q);
         return index == values.size() ? std::numeric_limits<std::uint32_t>::max() : values[index];
       };
-      const auto blog_value = [&](std::uint32_t q) { return tree.search_value_blog(q); };
-      std::vector<std::size_t> reference(query_count), blog(query_count);
+      const auto optimized_value = [&](std::uint32_t q) { return tree.search_value_optimized(q); };
+      std::vector<std::size_t> reference(query_count), optimized(query_count);
       measure(standard_value, queries, reference);
-      measure(blog_value, queries, blog);
-      if (reference != blog) {
+      measure(optimized_value, queries, optimized);
+      if (reference != optimized) {
         std::cerr << "Value warm-up mismatch for " << n << " elements\n";
         return 1;
       }
-      std::array<double, trials> reference_times{}, blog_times{};
+      std::array<double, trials> reference_times{}, optimized_times{};
       for (std::size_t trial = 0; trial < trials; ++trial) {
         if (trial % 2 == 0) {
           reference_times[trial] = measure(standard_value, queries, reference);
-          blog_times[trial] = measure(blog_value, queries, blog);
+          optimized_times[trial] = measure(optimized_value, queries, optimized);
         } else {
-          blog_times[trial] = measure(blog_value, queries, blog);
+          optimized_times[trial] = measure(optimized_value, queries, optimized);
           reference_times[trial] = measure(standard_value, queries, reference);
         }
-        if (reference != blog) {
+        if (reference != optimized) {
           std::cerr << "Value result mismatch for " << n << " elements\n";
           return 1;
         }
@@ -125,7 +125,7 @@ int main(int argc, char** argv)
       report(n, "std_lower_bound_value", reference_times, reference,
              values.capacity() * sizeof(std::uint32_t), 0);
       // This object retains a position map for the separate index-returning API.
-      report(n, "blog_eytzinger_value", blog_times, blog, tree.storage_bytes(), build_ms);
+      report(n, "optimized_eytzinger_value", optimized_times, optimized, tree.storage_bytes(), build_ms);
       continue;
     }
     const auto reference_search = [&](std::uint32_t q) {
@@ -136,26 +136,26 @@ int main(int argc, char** argv)
     };
     const auto tree_search = [&](std::uint32_t q) { return tree.lower_bound(q); };
     const auto prefetch_search = [&](std::uint32_t q) { return tree.lower_bound_prefetch(q); };
-    const auto blog_search = [&](std::uint32_t q) { return tree.lower_bound_blog(q); };
-    const auto blog_plain_search = [&](std::uint32_t q) { return tree.lower_bound_blog_no_prefetch(q); };
+    const auto optimized_search = [&](std::uint32_t q) { return tree.lower_bound_optimized(q); };
+    const auto optimized_plain_search = [&](std::uint32_t q) { return tree.lower_bound_optimized_no_prefetch(q); };
     std::vector<std::size_t> reference(query_count), binary(query_count), layout(query_count),
-        prefetched(query_count), blog(query_count), blog_plain(query_count);
+        prefetched(query_count), optimized(query_count), optimized_plain(query_count);
 
     // Full untimed warm-up and element-by-element correctness check.
     measure(reference_search, queries, reference);
     measure(binary_search, queries, binary);
     measure(tree_search, queries, layout);
     measure(prefetch_search, queries, prefetched);
-    measure(blog_search, queries, blog);
-    measure(blog_plain_search, queries, blog_plain);
+    measure(optimized_search, queries, optimized);
+    measure(optimized_plain_search, queries, optimized_plain);
     if (reference != binary || reference != layout || reference != prefetched
-        || reference != blog || reference != blog_plain) {
+        || reference != optimized || reference != optimized_plain) {
       std::cerr << "Warm-up results differ for " << n << " elements\n";
       return 1;
     }
 
     std::array<double, trials> reference_times{}, binary_times{}, tree_times{}, prefetch_times{};
-    std::array<double, trials> blog_times{}, blog_plain_times{};
+    std::array<double, trials> optimized_times{}, optimized_plain_times{};
     for (std::size_t trial = 0; trial < trials; ++trial) {
       // Twelve trials give each implementation every execution position twice.
       for (std::size_t offset = 0; offset < 6; ++offset) {
@@ -164,13 +164,13 @@ int main(int argc, char** argv)
           case 1: binary_times[trial] = measure(binary_search, queries, binary); break;
           case 2: tree_times[trial] = measure(tree_search, queries, layout); break;
           case 3: prefetch_times[trial] = measure(prefetch_search, queries, prefetched); break;
-          case 4: blog_times[trial] = measure(blog_search, queries, blog); break;
-          case 5: blog_plain_times[trial] = measure(blog_plain_search, queries, blog_plain); break;
+          case 4: optimized_times[trial] = measure(optimized_search, queries, optimized); break;
+          case 5: optimized_plain_times[trial] = measure(optimized_plain_search, queries, optimized_plain); break;
         }
       }
       // Consume and validate every trial's output outside the timed region.
       if (reference != binary || reference != layout || reference != prefetched
-          || reference != blog || reference != blog_plain) {
+          || reference != optimized || reference != optimized_plain) {
         std::cerr << "Measured results differ for " << n << " elements\n";
         return 1;
       }
@@ -180,7 +180,7 @@ int main(int argc, char** argv)
     report(n, "binary_lower_bound", binary_times, binary, input_storage, 0);
     report(n, "eytzinger", tree_times, layout, tree.storage_bytes(), build_ms);
     report(n, "eytzinger_prefetch", prefetch_times, prefetched, tree.storage_bytes(), build_ms);
-    report(n, "blog_eytzinger", blog_times, blog, tree.storage_bytes(), build_ms);
-    report(n, "blog_eytzinger_no_prefetch", blog_plain_times, blog_plain, tree.storage_bytes(), build_ms);
+    report(n, "optimized_eytzinger", optimized_times, optimized, tree.storage_bytes(), build_ms);
+    report(n, "optimized_eytzinger_no_prefetch", optimized_plain_times, optimized_plain, tree.storage_bytes(), build_ms);
   }
 }

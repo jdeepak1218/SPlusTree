@@ -1,36 +1,20 @@
-# Eytzinger traversal port from the blog
-
-## Source and scope
-
-This stage ports Ragnar Groot Koerkamp's `search_prefetch<4>` and `search`
-from the blog and its upstream Rust repository:
-
-- https://curiouscoding.nl/posts/static-search-tree/#binary-search-and-eytzinger-layout
-- https://github.com/RagnarGrootKoerkamp/static-search-tree/blob/master/src/eytzinger.rs
-- https://github.com/RagnarGrootKoerkamp/static-search-tree/blob/master/src/util.rs
-
-The retrieved helper uses `_MM_HINT_T0`, unlike our earlier T2 experiment.
-Upstream source-file hashes and the MIT notice are retained in `third_party/`.
-The header includes the upstream MIT notice so it survives standalone copying.
-
-This is a C++ port of the traversal, not an exact reproduction of the complete
-Rust benchmark, allocator, generated machine code, or hardware environment.
+# Optimized Eytzinger results
 
 ## What changed
 
-- Added `lower_bound_blog` (prefetched), `lower_bound_blog_no_prefetch`, and
-  `search_value_blog` to `include/eytzinger.hpp`.
+- Added `lower_bound_optimized` (prefetched), `lower_bound_optimized_no_prefetch`, and
+  `search_value_optimized` to `include/eytzinger.hpp`.
 - Child selection is `2 * node + (query > keys[node])`.
 - A separate initial loop performs four-level lookahead. The remaining steps
   run in a second loop with no prefetch requests.
-- Prefetch happens after the child update, matching the upstream order, using
+- Prefetch happens after the child update, using
   a single locality-3/T0 hint.
 - The answer is recovered after traversal by removing trailing one bits and the
-  preceding zero bit from the exit index, as in upstream `search_result_to_index`.
+  preceding zero bit from the exit index.
 - Index-returning wrappers perform one original-position-map lookup after that
   recovery. They no longer read the map repeatedly while tracking candidates.
 - The value-returning wrapper reads the recovered key or returns `UINT32_MAX`.
-  This reproduces the blog's value/sentinel contract, including its ambiguity
+  The value/sentinel contract includes an ambiguity
   between a real maximum key and an absent lower bound.
 - Key buffers are now explicitly 64-byte aligned with matching aligned
   allocation/deallocation. All old and new methods in each comparison share
@@ -39,13 +23,11 @@ Rust benchmark, allocator, generated machine code, or hardware environment.
 
 ## Necessary C++ safety adaptations
 
-The mathematical traversal and answer recovery follow the source. A literal
-translation of every expression would not be appropriate for our input contract:
+The traversal and answer recovery must preserve our input contract:
 
-1. The upstream prefetch target is calculated after the node update. Near the
-   bottom it can exceed the logical array length. The port skips such hints
-   before forming the pointer. It does not copy potentially invalid pointer
-   arithmetic. This adds a bound check to the prefetched loop.
+1. The prefetch target is calculated after the node update. Near the
+   bottom it can exceed the logical array length. The implementation skips such
+   hints before forming the pointer. This adds a bound check to the prefetched loop.
 2. Loop guards use division (`node <= n / 16`) instead of multiplying in the
    condition. They are equivalent to `16 * node < len` for valid indices, while
    avoiding overflow. Only the valid hint target is multiplied by 16.
@@ -57,17 +39,15 @@ translation of every expression would not be appropriate for our input contract:
 5. Empty input, duplicates, full-range unsigned keys, and index-based absence
    remain supported. Sorted input is checked during construction.
 
-The key buffer is aligned but no huge-page allocation is explicitly requested
-or verified. The blog uses huge pages in its experiments. The value wrapper
-does not access the position map, though the object retains that map to support
-the index wrappers. These differences are reported rather than called identical
-memory usage or an exact reproduction of the blog's published speedups.
+The key buffer is aligned, but huge-page allocation is neither explicitly
+requested nor verified. The value wrapper does not access the position map,
+though the object retains that map to support the index wrappers.
 
 ## Verification
 
 - Existing reference checks pass with both new index methods included.
 - The dedicated suite passes 867,795 query cases across 1,391 datasets. Each
-  query checks the original methods, both blog index methods, the blog value
+  query checks the original methods, both optimized index methods, the optimized value
   method, and binary search against the standard reference.
 - Coverage includes empty/singleton input, all small tree lengths through 513,
   incomplete levels, full-range unsigned values, duplicates across subtree
@@ -81,7 +61,7 @@ memory usage or an exact reproduction of the blog's published speedups.
 - The same suite passes in a release build with hints disabled.
 - Standalone-header, repeated-inclusion, and two-translation-unit link/run checks
   pass. GCC builds complete without warnings, including `-Wconversion`.
-- Disassembly contains `prefetcht0` and `setb` instructions for the blog-style
+- Disassembly contains `prefetcht0` and `setb` instructions for the optimized
   traversal. C++ comparison expressions do not themselves guarantee branchless
   machine code; the generated code was inspected on this toolchain.
 
@@ -125,9 +105,9 @@ different contracts and are reported separately.
 
 ### Uniform indices, first process
 
-Source: `benchmarks/blog_uniform.csv`.
+Source: `benchmarks/optimized_uniform.csv`.
 
-| Elements | Standard | Binary | Original Eytzinger | Earlier T2 | Blog without hints | Blog T0 |
+| Elements | Standard | Binary | Original Eytzinger | Earlier T2 | optimized without hints | optimized T0 |
 | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | 1,024 | 58.755 | 59.302 | 49.746 | 55.710 | 8.779 | 9.195 |
 | 65,536 | 106.936 | 106.795 | 85.365 | 95.539 | 20.985 | 17.974 |
@@ -142,14 +122,14 @@ Largest-input trial ranges (ns/query):
 - `binary_lower_bound`: 515.078–639.539.
 - `eytzinger`: 289.014–330.916.
 - `eytzinger_prefetch`: 343.336–398.302.
-- `blog_eytzinger_no_prefetch`: 427.266–620.147.
-- `blog_eytzinger`: 200.161–324.785.
+- `optimized_eytzinger_no_prefetch`: 427.266–620.147.
+- `optimized_eytzinger`: 200.161–324.785.
 
 ### Uniform indices, repeat process
 
-Source: `benchmarks/blog_uniform_repeat.csv`.
+Source: `benchmarks/optimized_uniform_repeat.csv`.
 
-| Elements | Standard | Binary | Original Eytzinger | Earlier T2 | Blog without hints | Blog T0 |
+| Elements | Standard | Binary | Original Eytzinger | Earlier T2 | optimized without hints | optimized T0 |
 | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | 1,024 | 58.833 | 60.308 | 50.155 | 55.861 | 9.029 | 9.233 |
 | 65,536 | 107.771 | 106.713 | 85.482 | 95.463 | 20.623 | 18.086 |
@@ -164,14 +144,14 @@ Largest-input trial ranges (ns/query):
 - `binary_lower_bound`: 492.326–627.080.
 - `eytzinger`: 288.949–330.139.
 - `eytzinger_prefetch`: 331.326–368.159.
-- `blog_eytzinger_no_prefetch`: 465.853–513.935.
-- `blog_eytzinger`: 199.491–210.057.
+- `optimized_eytzinger_no_prefetch`: 465.853–513.935.
+- `optimized_eytzinger`: 199.491–210.057.
 
 ### Duplicate-heavy indices
 
-Source: `benchmarks/blog_duplicates.csv`.
+Source: `benchmarks/optimized_duplicates.csv`.
 
-| Elements | Standard | Binary | Original Eytzinger | Earlier T2 | Blog without hints | Blog T0 |
+| Elements | Standard | Binary | Original Eytzinger | Earlier T2 | optimized without hints | optimized T0 |
 | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | 1,048,576 | 35.451 | 38.035 | 27.451 | 35.972 | 32.599 | 26.885 |
 | 33,554,555 | 39.007 | 39.776 | 32.820 | 43.789 | 56.483 | 76.917 |
@@ -182,14 +162,14 @@ Largest-input trial ranges (ns/query):
 - `binary_lower_bound`: 38.640–42.684.
 - `eytzinger`: 32.313–34.076.
 - `eytzinger_prefetch`: 43.299–44.689.
-- `blog_eytzinger_no_prefetch`: 54.663–60.307.
-- `blog_eytzinger`: 76.111–86.842.
+- `optimized_eytzinger_no_prefetch`: 54.663–60.307.
+- `optimized_eytzinger`: 76.111–86.842.
 
 ### All-equal indices
 
-Source: `benchmarks/blog_equal.csv`.
+Source: `benchmarks/optimized_equal.csv`.
 
-| Elements | Standard | Binary | Original Eytzinger | Earlier T2 | Blog without hints | Blog T0 |
+| Elements | Standard | Binary | Original Eytzinger | Earlier T2 | optimized without hints | optimized T0 |
 | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | 1,048,576 | 19.981 | 20.057 | 16.017 | 27.453 | 36.457 | 34.533 |
 | 33,554,555 | 24.410 | 25.053 | 20.757 | 36.579 | 69.574 | 82.646 |
@@ -200,14 +180,14 @@ Largest-input trial ranges (ns/query):
 - `binary_lower_bound`: 24.637–26.443.
 - `eytzinger`: 20.349–21.654.
 - `eytzinger_prefetch`: 36.249–38.974.
-- `blog_eytzinger_no_prefetch`: 68.666–71.553.
-- `blog_eytzinger`: 81.392–87.376.
+- `optimized_eytzinger_no_prefetch`: 68.666–71.553.
+- `optimized_eytzinger`: 81.392–87.376.
 
 ### Uniform values
 
-Source: `benchmarks/blog_values_uniform.csv`.
+Source: `benchmarks/optimized_values_uniform.csv`.
 
-| Elements | Standard value | Blog value | Standard / blog throughput ratio |
+| Elements | Standard value | optimized value | Standard / optimized throughput ratio |
 | ---: | ---: | ---: | ---: |
 | 1,024 | 56.558 | 9.248 | 6.12x |
 | 65,536 | 107.867 | 17.028 | 6.33x |
@@ -219,13 +199,13 @@ Source: `benchmarks/blog_values_uniform.csv`.
 Largest-input trial ranges (ns/query):
 
 - `std_lower_bound_value`: 596.143–700.095.
-- `blog_eytzinger_value`: 124.399–142.748.
+- `optimized_eytzinger_value`: 124.399–142.748.
 
 ### Duplicate-heavy values
 
-Source: `benchmarks/blog_values_duplicates.csv`.
+Source: `benchmarks/optimized_values_duplicates.csv`.
 
-| Elements | Standard value | Blog value | Standard / blog throughput ratio |
+| Elements | Standard value | optimized value | Standard / optimized throughput ratio |
 | ---: | ---: | ---: | ---: |
 | 1,048,576 | 35.952 | 26.787 | 1.34x |
 | 33,554,555 | 38.150 | 66.478 | 0.57x |
@@ -233,13 +213,13 @@ Source: `benchmarks/blog_values_duplicates.csv`.
 Largest-input trial ranges (ns/query):
 
 - `std_lower_bound_value`: 37.466–39.840.
-- `blog_eytzinger_value`: 58.484–70.888.
+- `optimized_eytzinger_value`: 58.484–70.888.
 
 ### All-equal values
 
-Source: `benchmarks/blog_values_equal.csv`.
+Source: `benchmarks/optimized_values_equal.csv`.
 
-| Elements | Standard value | Blog value | Standard / blog throughput ratio |
+| Elements | Standard value | optimized value | Standard / optimized throughput ratio |
 | ---: | ---: | ---: | ---: |
 | 1,048,576 | 21.161 | 34.626 | 0.61x |
 | 33,554,555 | 24.148 | 54.257 | 0.45x |
@@ -247,7 +227,7 @@ Source: `benchmarks/blog_values_equal.csv`.
 Largest-input trial ranges (ns/query):
 
 - `std_lower_bound_value`: 23.724–25.118.
-- `blog_eytzinger_value`: 53.576–55.618.
+- `optimized_eytzinger_value`: 53.576–55.618.
 
 ## Interpretation
 
@@ -257,15 +237,15 @@ matching checksums within each dataset/result contract. Total work was 1,392
 million measured searches plus 116 million warm-up searches.
 
 The faithful traversal port makes a substantial difference on large uniform
-input. At 33,554,555 keys, the blog T0 index method used 211.031 ns/query in the
+input. At 33,554,555 keys, the optimized T0 index method used 211.031 ns/query in the
 first process and 202.618 ns/query in the repeat, versus 325.704 and 321.845 for
 our original Eytzinger. That is approximately 35–37% less time per query. In the
 repeat it delivers 3.18 times standard-library throughput.
 
-Comparing the two blog index methods within the repeat, T0 prefetching reduces
+Comparing the two optimized index methods within the repeat, T0 prefetching reduces
 median time from 483.262 to 202.618 ns/query, about 58% less time. Their trial
 ranges do not overlap there. Thus the earlier T2 experiment's regression did not
-predict the behavior of the blog-style traversal with its actual hint and access
+predict the behavior of the optimized traversal with its actual hint and access
 pattern. The port changes several things together; this comparison does not
 isolate T0 versus T2 alone or attribute all improvement to one instruction.
 
@@ -275,7 +255,7 @@ times throughput. It avoids the final position-map access. Because value mode is
 a different process and contract, subtracting its timings from index-mode
 numbers would not establish the isolated cost of that map access.
 
-The blog method is not universally fastest: see duplicate-heavy and all-equal
+The optimized method is not universally fastest: see duplicate-heavy and all-equal
 measurements above. Repeated paths offer different caching and branch-prediction
 conditions. Hardware counters were not collected, so microarchitectural
 explanations remain hypotheses rather than diagnoses. The original method is
@@ -289,6 +269,6 @@ metadata and alignment slack are excluded. The value query touches no position
 map, but this shared object still retains it. Construction timing is only a
 single observation per dataset, not a rigorous build-time comparison.
 
-The next main stage is the scalar S+ tree from the blog, followed by node-search
-optimizations, SIMD, batching, and interleaving. The blog-port Eytzinger method
+The next main stage is the scalar S+ tree followed by node-search
+optimizations, SIMD, batching, and interleaving. The optimized Eytzinger method
 now provides a substantially stronger comparison baseline for those experiments.

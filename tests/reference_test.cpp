@@ -49,8 +49,8 @@ int main()
              == sst::reference_lower_bound(data, query));
       assert(tree.lower_bound(query) == sst::reference_lower_bound(data, query));
       assert(tree.lower_bound_prefetch(query) == sst::reference_lower_bound(data, query));
-      assert(tree.lower_bound_blog(query) == sst::reference_lower_bound(data, query));
-      assert(tree.lower_bound_blog_no_prefetch(query) == sst::reference_lower_bound(data, query));
+      assert(tree.lower_bound_optimized(query) == sst::reference_lower_bound(data, query));
+      assert(tree.lower_bound_optimized_no_prefetch(query) == sst::reference_lower_bound(data, query));
     }
   }
 }

@@ -73,8 +73,8 @@ For valid sorted input, results must agree with
 `std::lower_bound(values.begin(), values.end(), query) - values.begin()`,
 converted to `std::size_t`.
 
-The optional experimental `Eytzinger::search_value_blog` method instead follows
-the blog's value-returning API: it returns the first key at least the query, or
+The optional experimental `Eytzinger::search_value_optimized` method instead follows
+a value-returning API: it returns the first key at least the query, or
 `UINT32_MAX` if none exists. That value API cannot distinguish a real maximum key
 from no result; the index-returning methods remain unambiguous.
 

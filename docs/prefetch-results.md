@@ -97,7 +97,7 @@ No new persistent buffers are required for prefetching. At the largest size,
 both Eytzinger methods use 402,654,672 bytes of vector buffers, versus 134,218,220
 bytes for the sorted baseline. The benchmark retains both representations plus
 query/output buffers; total process memory is greater. This position-mapped
-layout is not a direct reproduction of the blog's value-returning implementation.
+layout supports original-position results as well as value results.
 
 See `benchmarks/README.md` and `tests/README.md` for reproduction commands.
 
@@ -179,6 +179,6 @@ another CPU, allocation layout, or search implementation.
 The result is a reason to retain measurements rather than make the new method
 the default. Optional follow-up experiments can vary locality, lookahead, explicit
 alignment, and branchless traversal one at a time. The next main learning stage
-from the blog is the scalar S+ tree: draw separators and leaves, build a compact
+is the scalar S+ tree: draw separators and leaves, build a compact
 layout, verify lower-bound semantics including duplicates, then run this same
 benchmark matrix. SIMD and batching come after the scalar tree is correct.

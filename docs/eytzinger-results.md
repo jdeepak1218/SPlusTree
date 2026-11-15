@@ -50,7 +50,7 @@ large input length alone does not imply a large active search working set.
 At the largest size, baseline key storage is 134,218,220 bytes (about 128 MiB).
 Eytzinger's key and position buffers occupy 402,654,672 bytes (about 384 MiB).
 The extra mapping supports our index-returning contract. This is not a direct
-reproduction of the blog's value-returning search. The benchmark retains both
+comparison with a value-returning search. The benchmark retains both
 representations for validation; process memory also includes queries and output.
 
 The largest uniform tree took about 478 ms to construct, including validation

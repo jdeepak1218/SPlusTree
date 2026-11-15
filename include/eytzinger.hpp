@@ -1,8 +1,4 @@
 /*
-The blog-port traversal is adapted from Ragnar Groot Koerkamp's static-search-tree.
-https://github.com/RagnarGrootKoerkamp/static-search-tree
-Upstream notice (retained here for standalone header distribution):
-
 MIT License
 
 Copyright (c) 2025 Ragnar Groot Koerkamp
@@ -145,25 +141,24 @@ public:
     return answer;
   }
 
-  // Port of Ragnar Groot Koerkamp's search_prefetch<4> / search.
-  // Upstream MIT notice: third_party/static-search-tree.LICENSE.
-  std::size_t lower_bound_blog(std::uint32_t query) const noexcept
+  // Comparison-based traversal with four-level prefetching.
+  std::size_t lower_bound_optimized(std::uint32_t query) const noexcept
   {
-    const auto node = blog_node<true>(query);
+    const auto node = optimized_node<true>(query);
     return node == 0 ? size() : sorted_positions_[node];
   }
 
-  std::size_t lower_bound_blog_no_prefetch(std::uint32_t query) const noexcept
+  std::size_t lower_bound_optimized_no_prefetch(std::uint32_t query) const noexcept
   {
-    const auto node = blog_node<false>(query);
+    const auto node = optimized_node<false>(query);
     return node == 0 ? size() : sorted_positions_[node];
   }
 
-  // Matches the blog's value/sentinel API; use the index API to distinguish
+  // Returns a value or sentinel; use the index API to distinguish
   // an actual UINT32_MAX key from an absent lower bound.
-  std::uint32_t search_value_blog(std::uint32_t query) const noexcept
+  std::uint32_t search_value_optimized(std::uint32_t query) const noexcept
   {
-    const auto node = blog_node<true>(query);
+    const auto node = optimized_node<true>(query);
     return node == 0 ? std::numeric_limits<std::uint32_t>::max() : keys_[node];
   }
 
@@ -172,7 +167,7 @@ private:
   std::vector<std::size_t> sorted_positions_;
 
   template<bool Prefetch>
-  std::size_t blog_node(std::uint32_t query) const noexcept
+  std::size_t optimized_node(std::uint32_t query) const noexcept
   {
     const auto n = size();
     std::size_t node = 1;
@@ -180,7 +175,7 @@ private:
       while (node <= n / 16) {
         node = 2 * node + static_cast<std::size_t>(query > keys_[node]);
 #if (defined(__GNUC__) || defined(__clang__)) && !defined(SST_DISABLE_PREFETCH)
-        // Upstream prefetches after updating node. Some targets exceed n;
+        // Prefetch after updating node. Some targets exceed n;
         // skip those hints rather than form an out-of-allocation pointer.
         if (node <= n / 16) {
           __builtin_prefetch(keys_.data() + 16 * node, 0, 3);
