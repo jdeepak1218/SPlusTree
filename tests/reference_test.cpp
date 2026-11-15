@@ -12,6 +12,23 @@ std::size_t reference_lower_bound(
   return static_cast<std::size_t>(it - values.begin());
 }
 
+std::size_t binary_lower_bound(
+    const std::vector<std::uint32_t>& values, std::uint32_t query)
+{
+  std::size_t left = 0;
+  std::size_t right = values.size();
+
+  while (left < right) {
+    const auto mid = left + (right - left) / 2;
+    if (values[mid] < query) {
+      left = mid + 1;
+    } else {
+      right = mid;
+    }
+  }
+  return left;
+}
+
 int main()
 {
   const std::vector<std::uint32_t> values{2, 5, 5, 9, 14};
@@ -38,4 +55,18 @@ int main()
   const std::vector<std::uint32_t> extremes{0, max_key};
   assert(reference_lower_bound(extremes, 0) == 0);
   assert(reference_lower_bound(extremes, max_key) == 1);
+
+  const std::vector<std::vector<std::uint32_t>> datasets{
+      values, empty, single, repeated, extremes
+  };
+  const std::vector<std::uint32_t> queries{
+      0, 1, 2, 4, 5, 6, 9, 14, 15, max_key
+  };
+
+  for (const auto& data : datasets) {
+    for (const auto query : queries) {
+      assert(binary_lower_bound(data, query)
+             == reference_lower_bound(data, query));
+    }
+  }
 }
