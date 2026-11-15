@@ -48,6 +48,7 @@ int main()
       assert(sst::binary_lower_bound(data, query)
              == sst::reference_lower_bound(data, query));
       assert(tree.lower_bound(query) == sst::reference_lower_bound(data, query));
+      assert(tree.lower_bound_prefetch(query) == sst::reference_lower_bound(data, query));
     }
   }
 }

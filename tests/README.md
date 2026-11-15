@@ -6,10 +6,12 @@ From the project root:
 mkdir -p build
 g++ -std=c++20 -O2 -Wall -Wextra -Wpedantic -Wconversion -Iinclude tests/reference_test.cpp -o build/reference_test
 ./build/reference_test
-g++ -std=c++20 -O2 -Wall -Wextra -Wpedantic -Wconversion -Iinclude tests/eytzinger_test.cpp -o build/eytzinger_test
+g++ -std=c++20 -O2 -D_GLIBCXX_ASSERTIONS -Wall -Wextra -Wpedantic -Wconversion -Iinclude tests/eytzinger_test.cpp -o build/eytzinger_test
 ./build/eytzinger_test
-g++ -std=c++20 -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -Iinclude tests/eytzinger_test.cpp -o build/eytzinger_test_sanitized
+g++ -std=c++20 -O1 -g -D_GLIBCXX_ASSERTIONS -fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer -Iinclude tests/eytzinger_test.cpp -o build/eytzinger_test_sanitized
 ./build/eytzinger_test_sanitized
+g++ -std=c++20 -O2 -DNDEBUG -DSST_DISABLE_PREFETCH -Wall -Wextra -Wpedantic -Wconversion -Iinclude tests/eytzinger_test.cpp -o build/eytzinger_test_fallback
+./build/eytzinger_test_fallback
 ```
 
 If LeakSanitizer reports that it cannot run under ptrace, use
@@ -21,19 +23,23 @@ uses explicit failure checks that remain active even with `-DNDEBUG`.
 
 ## Coverage
 
-- The existing reference checks now compare Eytzinger results as well.
+- The existing reference checks compare both Eytzinger methods as well.
 - All 286 sorted arrays of length zero through ten over `{0, 1, UINT32_MAX}`.
 - Lengths near powers of two through `2^17`, including incomplete last levels.
+- Every length from zero through 513, probing every key and adjacent values.
+  This covers the first lookahead thresholds and incomplete descendant blocks.
 - 500 seeded randomized cases: full-range keys, small alphabets, all zero,
   all maximum, and duplicate-heavy keys close to the maximum.
 - A 1,000,003-element random array and an 8,388,731-element duplicate-heavy
   array with an extreme final key.
 - Queries for zero, maximum, the signed/unsigned boundary, random values, sampled
   exact keys, and their neighbors. Sampling includes large duplicate runs.
-- Both binary search and Eytzinger compared to `std::lower_bound`: 338,250 query
-  comparisons across 877 datasets.
+- Binary search and both Eytzinger methods compared to `std::lower_bound`:
+  867,795 query cases across 1,391 datasets.
 - Four invalid unsorted arrays must throw `std::invalid_argument`.
 - Ownership after source mutation, copying, moving, and copy assignment.
+- The same suite passes with hints disabled and with `-DNDEBUG`; explicit
+  differential checks do not depend on assertions.
 
 Construction validates sorted input once. The baseline binary-search functions
 still have a sorted-input precondition; invalid arrays are not passed to them.

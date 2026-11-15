@@ -29,6 +29,7 @@ void verify(const std::vector<std::uint32_t>& values, std::size_t samples = 100)
   const auto check = [&](std::uint32_t query) {
     const auto expected = sst::reference_lower_bound(values, query);
     if (tree.lower_bound(query) != expected
+        || tree.lower_bound_prefetch(query) != expected
         || sst::binary_lower_bound(values, query) != expected) {
       throw std::runtime_error("Mismatch: n=" + std::to_string(values.size())
                                + " query=" + std::to_string(query));
@@ -72,6 +73,15 @@ int main()
 try {
   std::vector<std::uint32_t> values;
   exhaustive(values, 0);
+
+  // Exhaust all small tree shapes, especially lookahead and partial-block edges.
+  for (std::size_t n = 0; n <= 513; ++n) {
+    values.resize(n);
+    for (std::size_t i = 0; i < n; ++i) {
+      values[i] = static_cast<std::uint32_t>(2 * i);
+    }
+    verify(values, n + 1);
+  }
 
   // Complete-tree and partial-last-level boundaries, including even lengths.
   for (unsigned power = 0; power <= 17; ++power) {
@@ -132,9 +142,12 @@ try {
   values.assign(100, 0);
   require(owned.lower_bound(5) == 1 && owned.lower_bound(10) == 4,
           "Tree does not own its data");
+  require(owned.lower_bound_prefetch(5) == 1 && owned.lower_bound_prefetch(10) == 4,
+          "Prefetch search lost owned data");
   auto copy = owned;
   auto moved = std::move(copy);
   require(moved.lower_bound(5) == 1, "Move lost tree data");
+  require(moved.lower_bound_prefetch(5) == 1, "Prefetch search lost moved data");
   copy = owned;
   require(copy.lower_bound(6) == 3, "Copy assignment lost tree data");
 
