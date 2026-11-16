@@ -33,3 +33,9 @@ compile_commands.json
 .DS_Store
 Thumbs.db
 Desktop.ini
+
+# Downloaded and derived benchmark datasets
+/data/
+
+# Local reference material
+/third_party/

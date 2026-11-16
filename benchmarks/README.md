@@ -200,3 +200,49 @@ two half-mask extracts; compressed packing is a later experiment. Persistent
 storage and construction are shared across all S+ methods. Cross-build timing
 changes include other compiler effects and process variation. See
 `docs/stree-popcount.md` and `docs/popcount-results.md` for details.
+
+## Packed comparison-mask experiment
+
+The `packed` mode compares standard lower bound, optimized Eytzinger, early-exit
+S+, counting S+, unpacked population-count S+, and packed population-count S+.
+Trailing-zero search remains covered by correctness tests but is not retimed in
+this focused mode. Twelve trials rotate six methods through all execution
+positions twice, with one million queries per pass and one warm-up. All outputs
+are checked against the standard reference outside timed regions.
+
+```bash
+g++ -std=c++20 -O3 -DNDEBUG -Wall -Wextra -Wpedantic -Wconversion -Iinclude benchmarks/search_benchmark.cpp -o build/search_benchmark
+g++ -std=c++20 -O3 -mavx2 -mpopcnt -DNDEBUG -Wall -Wextra -Wpedantic -Wconversion -Iinclude benchmarks/search_benchmark.cpp -o build/search_benchmark_packed
+g++ -std=c++20 -O3 -mavx2 -mno-popcnt -DNDEBUG -Wall -Wextra -Wpedantic -Wconversion -Iinclude benchmarks/search_benchmark.cpp -o build/search_benchmark_packed_software
+./build/search_benchmark uniform packed > benchmarks/packed_generic_uniform.csv
+./build/search_benchmark_packed uniform packed > benchmarks/packed_avx2_uniform.csv
+./build/search_benchmark_packed duplicates packed > benchmarks/packed_avx2_duplicates.csv
+./build/search_benchmark_packed equal packed > benchmarks/packed_avx2_equal.csv
+./build/search_benchmark_packed uniform packed > benchmarks/packed_avx2_uniform_repeat.csv
+./build/search_benchmark_packed_software uniform packed > benchmarks/packed_software_uniform.csv
+```
+
+Execute sequentially. These six runs perform 2,016 million measured searches
+and 168 million warm-up searches. Uniform runs retain all six sizes. Stress
+workloads run at one million and 33.6 million keys. The generic and software-
+population-count controls use uniform inputs. Targeted executables require
+compatible AVX2/POPCNT CPU and OS support. The software control keeps AVX2 and
+explicitly disables POPCNT; generic packed search delegates to the existing
+portable population-count helper. No runtime ISA dispatch is provided.
+
+All S+ methods share the same buffers and construction. The selection between
+the older population-count comparison and this packed comparison happens
+outside timing; a compile-time lambda parameter chooses the query method with
+no per-query mode branch. Historical result modes remain available. Source,
+code-generation checks, and measurements are in `docs/stree-packed.md` and
+`docs/packed-results.md`.
+
+## Realistic workload matrix
+
+`workload_benchmark.cpp` measures all eight index-search methods across uniform,
+dense, clustered, all-equal, and real chromosome-derived keys. Query cases cover
+hits, misses, hot keys, ordered probes, and boundaries, with every result checked.
+Run `bash tools/run_workload_benchmarks.sh` after preparing the ignored dataset.
+See [reproduction and methodology](../docs/workload-validation.md) and
+[results](../docs/workload-results.md). CSV names start with `workloads_`;
+`real_dataset.json` records the real input hashes and transformation.

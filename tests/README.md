@@ -151,3 +151,36 @@ pass. Existing reference and Eytzinger checks pass. Mutations carrying an end
 marker into the count, overlapping half masks, and using a 31-bit-only signed
 comparison were detected. Header-integration checks pass. No temporary mutants
 are retained. Existing sanitizer/platform limitations still apply.
+
+## Packed comparison masks
+
+All five S+ query methods are checked against the reference for 4,697,951 cases
+across 3,777 datasets. Another 51 packed assertions cover every lane count,
+empty/full masks, half-vector boundaries, maximum keys, and the highest mask bit.
+The existing explicit mask/population assertions remain active.
+
+```bash
+g++ -std=c++20 -O3 -mavx2 -mpopcnt -DNDEBUG -Wall -Wextra -Wpedantic -Wconversion -Iinclude tests/stree_test.cpp -o build/stree_test_packed
+./build/stree_test_packed
+g++ -std=c++20 -O3 -mavx2 -mno-popcnt -DNDEBUG -Wall -Wextra -Wpedantic -Wconversion -Iinclude tests/stree_test.cpp -o build/stree_test_packed_software
+./build/stree_test_packed_software
+g++ -std=c++20 -O3 -mavx2 -mpopcnt -DSST_DISABLE_MASK_SIMD -DNDEBUG -Wall -Wextra -Wpedantic -Wconversion -Iinclude tests/stree_test.cpp -o build/stree_test_packed_fallback
+./build/stree_test_packed_fallback
+```
+
+Generic optimized and AVX2 ASan/UBSan configurations pass too. Use the existing sanitizer
+command with `-mavx2 -mpopcnt` for the explicit backend. Temporary mutants missing
+the divide-by-two operation, using unsigned saturation, and dropping bit 31 were
+caught. Header, repeated-inclusion, and two-translation-unit checks pass. No
+mutants are retained. Existing environment and sanitizer limitations still apply.
+
+## Comprehensive workload validation
+
+Run `bash tools/run_validation.sh` for all existing suites, all 16 node widths,
+20 random seeds, realistic query patterns, concurrent reads, data-input checks,
+four release configurations, and ASan/UBSan. See
+[coverage and reproduction](../docs/workload-validation.md) and the
+[measured report](../docs/workload-results.md). Release smoke checks remain active
+under `-DNDEBUG`. Raw validation output is in
+`benchmarks/workload-validation.txt`. ThreadSanitizer could not start in this
+WSL environment; leak checking is disabled for sanitizer runs.

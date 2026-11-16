@@ -1,0 +1,7 @@
+{
+  "source_url": "https://hgdownload.soe.ucsc.edu/goldenPath/hg38/chromosomes/chr22.fa.gz",
+  "source_sha256": "05f9d97d6fbfd08a44ca45b50837ca2ae9c471f35ba79dffec04d2cb5eaaf695",
+  "keys": 39159057,
+  "encoding": "forward 16-mers, A=0 C=1 G=2 T=3; case insensitive; reset on ambiguous bases and headers; little-endian uint32; sequence order",
+  "derived_sha256": "c446e22bf3256156a823157c069a3dbf15a60d3565d1e5aaa6098b0bdfd89d2c"
+}

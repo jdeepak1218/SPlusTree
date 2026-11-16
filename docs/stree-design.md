@@ -115,3 +115,7 @@ and a portable fallback. See `docs/stree-mask.md` and `docs/mask-results.md`.
 those bits. It preserves the full unsigned range and uses hardware population
 count when enabled by the compiler target. See `docs/stree-popcount.md` and
 `docs/popcount-results.md`.
+
+`lower_bound_packed` packs comparison results into sixteen-bit lanes, extracts
+two sign bits per qualifying key, and divides their population count by two.
+See `docs/stree-packed.md` and `docs/packed-results.md` for details and measurements.

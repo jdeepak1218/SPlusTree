@@ -129,6 +129,19 @@ public:
     return std::min(n, node * KeysPerNode + slot);
   }
 
+  std::size_t lower_bound_packed(std::uint32_t query) const noexcept
+  {
+    const auto n = size();
+    if (n == 0) return 0;
+    std::size_t node = 0;
+    for (std::size_t level = 0; level + 1 < offsets_.size(); ++level) {
+      const auto child = find_packed(nodes_[offsets_[level] + node], query);
+      node = node * fanout + child;
+    }
+    const auto slot = find_packed(nodes_[offsets_.back() + node], query);
+    return std::min(n, node * KeysPerNode + slot);
+  }
+
 private:
   std::size_t size_ = 0;
   std::vector<Node> nodes_;
@@ -210,6 +223,28 @@ private:
     }
     // Exactly one bit per real key; no end marker or lane-order restoration.
     return static_cast<std::size_t>(std::popcount(mask));
+  }
+
+  static std::size_t find_packed(const Node& node, std::uint32_t query) noexcept
+  {
+#if defined(__AVX2__) && (defined(__x86_64__) || defined(__i386__)) && !defined(SST_DISABLE_MASK_SIMD)
+    if constexpr (KeysPerNode == 16) {
+      const auto bias = _mm256_set1_epi32(std::numeric_limits<std::int32_t>::min());
+      const auto q = _mm256_set1_epi32(std::bit_cast<std::int32_t>(query ^ 0x80000000U));
+      const auto low = _mm256_load_si256(reinterpret_cast<const __m256i*>(node.keys.data()));
+      const auto high = _mm256_load_si256(reinterpret_cast<const __m256i*>(node.keys.data() + 8));
+      const auto low_below = _mm256_cmpgt_epi32(q, _mm256_xor_si256(low, bias));
+      const auto high_below = _mm256_cmpgt_epi32(q, _mm256_xor_si256(high, bias));
+      // True comparisons are -1, so signed saturation preserves them as 0xffff.
+      const auto packed = _mm256_packs_epi32(low_below, high_below);
+      const auto mask = static_cast<std::uint32_t>(_mm256_movemask_epi8(packed));
+      // Each true 16-bit lane contributes two byte-sign bits; lane order is irrelevant.
+      return static_cast<std::size_t>(std::popcount(mask)) / 2;
+    } else
+#endif
+    {
+      return find_popcount(node, query);
+    }
   }
 };
 
