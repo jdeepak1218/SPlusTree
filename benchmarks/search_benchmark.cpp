@@ -13,6 +13,7 @@ namespace {
 constexpr std::size_t query_count = 1'000'000;
 constexpr std::size_t trials = 14;
 constexpr std::size_t count_trials = 12;
+constexpr std::size_t mask_trials = 10;
 
 template<class Search>
 double measure(const Search& search,
@@ -54,8 +55,8 @@ int main(int argc, char** argv)
   const std::string_view workload = argc >= 2 ? argv[1] : "uniform";
   const std::string_view results = argc >= 3 ? argv[2] : "indices";
   if (argc > 3 || (workload != "uniform" && workload != "duplicates"
-                   && workload != "equal") || (results != "indices" && results != "values" && results != "counting")) {
-    std::cerr << "Usage: search_benchmark [uniform|duplicates|equal] [indices|values|counting]\n";
+                   && workload != "equal") || (results != "indices" && results != "values" && results != "counting" && results != "mask")) {
+    std::cerr << "Usage: search_benchmark [uniform|duplicates|equal] [indices|values|counting|mask]\n";
     return 1;
   }
   constexpr std::array<std::size_t, 6> sizes{
@@ -63,7 +64,7 @@ int main(int argc, char** argv)
   };
   std::cout << "elements,input_bytes,implementation,queries,trials,median_ns_per_query,"
                "min_ns_per_query,max_ns_per_query,checksum,storage_bytes,build_ms";
-  const auto output_trials = results == "counting" ? count_trials : trials;
+  const auto output_trials = results == "mask" ? mask_trials : (results == "counting" ? count_trials : trials);
   for (std::size_t i = 0; i < output_trials; ++i) std::cout << ",trial_" << i << "_ns";
   std::cout << '\n';
   std::cout << std::fixed << std::setprecision(3);
@@ -137,6 +138,43 @@ int main(int argc, char** argv)
     const double stree_build_ms = std::chrono::duration<double, std::milli>(
         std::chrono::steady_clock::now() - stree_build_start).count();
     const auto stree_search = [&](std::uint32_t q) { return stree.lower_bound(q); };
+    if (results == "mask") {
+      const auto standard = [&](std::uint32_t q) { return sst::reference_lower_bound(values, q); };
+      const auto eytzinger = [&](std::uint32_t q) { return tree.lower_bound_optimized(q); };
+      const auto counted = [&](std::uint32_t q) { return stree.lower_bound_count(q); };
+      const auto masked = [&](std::uint32_t q) { return stree.lower_bound_mask(q); };
+      std::vector<std::size_t> reference(query_count), eytzinger_output(query_count),
+          early_output(query_count), count_output(query_count), mask_output(query_count);
+      measure(standard, queries, reference);
+      measure(eytzinger, queries, eytzinger_output);
+      measure(stree_search, queries, early_output);
+      measure(counted, queries, count_output);
+      measure(masked, queries, mask_output);
+      const auto matches = [&] {
+        return reference == eytzinger_output && reference == early_output
+            && reference == count_output && reference == mask_output;
+      };
+      if (!matches()) { std::cerr << "Mask warm-up mismatch\n"; return 1; }
+      std::array<double, mask_trials> standard_times{}, eytzinger_times{}, early_times{}, count_times{}, mask_times{};
+      for (std::size_t trial = 0; trial < mask_trials; ++trial) {
+        for (std::size_t position = 0; position < 5; ++position) {
+          switch ((trial + position) % 5) {
+            case 0: standard_times[trial] = measure(standard, queries, reference); break;
+            case 1: eytzinger_times[trial] = measure(eytzinger, queries, eytzinger_output); break;
+            case 2: early_times[trial] = measure(stree_search, queries, early_output); break;
+            case 3: count_times[trial] = measure(counted, queries, count_output); break;
+            case 4: mask_times[trial] = measure(masked, queries, mask_output); break;
+          }
+        }
+        if (!matches()) { std::cerr << "Mask result mismatch\n"; return 1; }
+      }
+      report(n, "std_lower_bound", standard_times, reference, values.capacity() * sizeof(std::uint32_t), 0);
+      report(n, "optimized_eytzinger", eytzinger_times, eytzinger_output, tree.storage_bytes(), build_ms);
+      report(n, "stree_scalar", early_times, early_output, stree.storage_bytes(), stree_build_ms);
+      report(n, "stree_count", count_times, count_output, stree.storage_bytes(), stree_build_ms);
+      report(n, "stree_mask", mask_times, mask_output, stree.storage_bytes(), stree_build_ms);
+      continue;
+    }
     if (results == "counting") {
       const auto standard = [&](std::uint32_t q) { return sst::reference_lower_bound(values, q); };
       const auto eytzinger = [&](std::uint32_t q) { return tree.lower_bound_optimized(q); };

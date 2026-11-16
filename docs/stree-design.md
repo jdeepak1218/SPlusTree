@@ -106,3 +106,7 @@ this version one at a time.
 The additional `lower_bound_count` method uses the same layout and counts keys
 below the query instead of stopping early. It permits compiler auto-vectorization;
 see `docs/stree-counting.md` for code and `docs/count-results.md` for measurements.
+
+`lower_bound_mask` instead forms ordered comparison bits and locates the first
+set bit with a trailing-zero count. It has an AVX2 backend for sixteen-key nodes
+and a portable fallback. See `docs/stree-mask.md` and `docs/mask-results.md`.

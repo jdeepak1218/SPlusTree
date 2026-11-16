@@ -128,3 +128,38 @@ Compiler diagnostics and assembly checks are described in
 The counting loop uses no SIMD intrinsics. GCC's unrolling hint allows its
 vectorizer to see reductions in both internal nodes and leaves. No runtime ISA
 dispatch is added. Other compilers may choose different code generation.
+
+## Ordered-mask comparison
+
+The `mask` mode compares standard lower bound, optimized Eytzinger, early-exit
+S+ search, counting S+ search, and ordered-mask S+ search. Each uses one million
+queries per pass, one warm-up, and ten trials. Rotating five methods gives each
+every execution position twice. Outputs are checked element by element after
+every trial; medians, min/max, and all ten raw timings are saved.
+
+```bash
+g++ -std=c++20 -O3 -DNDEBUG -Wall -Wextra -Wpedantic -Wconversion -Iinclude benchmarks/search_benchmark.cpp -o build/search_benchmark
+g++ -std=c++20 -O3 -mavx2 -DNDEBUG -Wall -Wextra -Wpedantic -Wconversion -Iinclude benchmarks/search_benchmark.cpp -o build/search_benchmark_avx2
+g++ -std=c++20 -O3 -mavx2 -DSST_DISABLE_MASK_SIMD -DNDEBUG -Wall -Wextra -Wpedantic -Wconversion -Iinclude benchmarks/search_benchmark.cpp -o build/search_benchmark_mask_fallback
+./build/search_benchmark uniform mask > benchmarks/mask_generic_uniform.csv
+./build/search_benchmark duplicates mask > benchmarks/mask_generic_duplicates.csv
+./build/search_benchmark equal mask > benchmarks/mask_generic_equal.csv
+./build/search_benchmark_avx2 uniform mask > benchmarks/mask_avx2_uniform.csv
+./build/search_benchmark_avx2 duplicates mask > benchmarks/mask_avx2_duplicates.csv
+./build/search_benchmark_avx2 equal mask > benchmarks/mask_avx2_equal.csv
+./build/search_benchmark_avx2 uniform mask > benchmarks/mask_avx2_uniform_repeat.csv
+./build/search_benchmark_mask_fallback uniform mask > benchmarks/mask_fallback_avx2_uniform.csv
+```
+
+Run sequentially and only execute AVX2 binaries on a compatible CPU/OS. These
+commands execute 1,600 million measured searches and 160 million warm-up searches.
+The distributions and sizes are unchanged from the counting comparison. The
+fallback control disables only the explicit mask backend; the compiler can still
+auto-vectorize its ordinary C++ loop and the counting method. It is not a global
+no-SIMD build. Compile all translation units with consistent target flags and
+`SST_DISABLE_MASK_SIMD` settings; runtime ISA dispatch is not provided.
+
+The AVX2 mask backend is selected for sixteen-key nodes; other widths and generic
+builds use the portable ordered-bit loop. SIMD extracts one bit per 32-bit lane
+using register casts, not floating-point arithmetic. No extra persistent storage
+is allocated. See `docs/stree-mask.md` and `docs/mask-results.md` for details.

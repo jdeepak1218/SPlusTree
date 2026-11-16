@@ -2,12 +2,17 @@
 
 #include <algorithm>
 #include <array>
+#include <bit>
 #include <cstddef>
 #include <cstdint>
 #include <limits>
 #include <stdexcept>
 #include <utility>
 #include <vector>
+
+#if defined(__AVX2__) && (defined(__x86_64__) || defined(__i386__))
+#include <immintrin.h>
+#endif
 
 namespace sst {
 
@@ -98,6 +103,19 @@ public:
     return std::min(n, node * KeysPerNode + slot);
   }
 
+  std::size_t lower_bound_mask(std::uint32_t query) const noexcept
+  {
+    const auto n = size();
+    if (n == 0) return 0;
+    std::size_t node = 0;
+    for (std::size_t level = 0; level + 1 < offsets_.size(); ++level) {
+      const auto child = find_mask(nodes_[offsets_[level] + node], query);
+      node = node * fanout + child;
+    }
+    const auto slot = find_mask(nodes_[offsets_.back() + node], query);
+    return std::min(n, node * KeysPerNode + slot);
+  }
+
 private:
   std::size_t size_ = 0;
   std::vector<Node> nodes_;
@@ -128,6 +146,32 @@ private:
       count += static_cast<std::uint32_t>(node.keys[i] < query);
     }
     return count;
+  }
+
+  static std::size_t find_mask(const Node& node, std::uint32_t query) noexcept
+  {
+    std::uint32_t mask = 0;
+#if defined(__AVX2__) && (defined(__x86_64__) || defined(__i386__)) && !defined(SST_DISABLE_MASK_SIMD)
+    if constexpr (KeysPerNode == 16) {
+      const auto q = _mm256_set1_epi32(std::bit_cast<std::int32_t>(query));
+      const auto low = _mm256_load_si256(reinterpret_cast<const __m256i*>(node.keys.data()));
+      const auto high = _mm256_load_si256(reinterpret_cast<const __m256i*>(node.keys.data() + 8));
+      // Unsigned min(key, q) == q is equivalent to key >= q.
+      const auto low_matches = _mm256_cmpeq_epi32(_mm256_min_epu32(low, q), q);
+      const auto high_matches = _mm256_cmpeq_epi32(_mm256_min_epu32(high, q), q);
+      // One bit per 32-bit lane, preserving sorted positions across both halves.
+      mask = static_cast<std::uint32_t>(_mm256_movemask_ps(_mm256_castsi256_ps(low_matches)))
+           | (static_cast<std::uint32_t>(_mm256_movemask_ps(_mm256_castsi256_ps(high_matches))) << 8);
+    } else
+#endif
+    {
+      for (std::size_t i = 0; i < KeysPerNode; ++i) {
+        mask |= static_cast<std::uint32_t>(node.keys[i] >= query) << i;
+      }
+    }
+    // A marker returns the node width when no real lane qualifies; never scan zero.
+    mask |= std::uint32_t{1} << KeysPerNode;
+    return static_cast<std::size_t>(std::countr_zero(mask));
   }
 };
 

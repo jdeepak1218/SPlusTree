@@ -106,3 +106,23 @@ Three temporary counting mutations were detected: using `<=`, comparing keys
 as signed integers, and overwriting rather than accumulating the count. Header
 integration checks pass with the new method. The code-generation probe and
 inspection instructions are in `docs/stree-counting.md`.
+
+## Ordered-mask search
+
+The suite now checks early exit, counting, and mask search against the same
+reference for all 4,697,951 query cases across 3,777 datasets. An additional 51
+explicit assertions cover every suffix mask of a sixteen-key node: all-match,
+no-match, positions across the 7/8 half boundary, and full-range maximum keys.
+
+Generic, AVX2 release, explicit-backend-disabled, and AVX2 ASan/UBSan builds pass.
+To exercise the portable mask path while keeping other AVX2 code enabled:
+
+```bash
+g++ -std=c++20 -O3 -mavx2 -DSST_DISABLE_MASK_SIMD -DNDEBUG -Wall -Wextra -Wpedantic -Wconversion -Iinclude tests/stree_test.cpp -o build/stree_test_mask_fallback
+./build/stree_test_mask_fallback
+```
+
+Temporary mutations reversing upper-half placement, removing the end marker,
+and using signed SIMD minimum were detected. No mutants are retained. Header
+integration checks also pass with the mask API. Sanitizer limitations and
+untested platform/allocation-failure cases remain as described above.

@@ -26,11 +26,12 @@ void verify(const std::vector<std::uint32_t>& values, std::size_t samples = 128)
     const auto expected = sst::reference_lower_bound(values, q);
     const auto actual = tree.lower_bound(q);
     const auto counted = tree.lower_bound_count(q);
-    if (expected != actual || counted != expected) {
+    const auto masked = tree.lower_bound_mask(q);
+    if (expected != actual || counted != expected || masked != expected) {
       throw std::runtime_error("Mismatch: B=" + std::to_string(B)
           + " n=" + std::to_string(values.size()) + " query=" + std::to_string(q)
           + " expected=" + std::to_string(expected) + " early=" + std::to_string(actual)
-          + " count=" + std::to_string(counted));
+          + " count=" + std::to_string(counted) + " mask=" + std::to_string(masked));
     }
     ++queries;
   };
@@ -145,11 +146,22 @@ try {
   const sst::STree<2> duplicates({2, 5, 5, 5, 5, 9, 14, 17});
   require(duplicates.lower_bound(5) == 1, "First duplicate lost");
   require(duplicates.lower_bound_count(5) == 1, "Counting first duplicate lost");
+  require(duplicates.lower_bound_mask(5) == 1, "Mask first duplicate lost");
+  // Exercise every suffix mask, including the 7/8 lane boundary and no match.
+  for (std::size_t split = 0; split <= 16; ++split) {
+    std::vector<std::uint32_t> lanes(16, maximum);
+    std::fill_n(lanes.begin(), split, 0U);
+    const sst::STree<> lane_tree(lanes);
+    require(lane_tree.lower_bound_mask(0) == 0, "All-match mask failed");
+    require(lane_tree.lower_bound_mask(1) == split, "Lane order or end marker failed");
+    require(lane_tree.lower_bound_mask(maximum) == split, "Unsigned mask failed");
+  }
   values = {2, 5, 5, 9};
   const sst::STree<> owned(values);
   values.assign(100, 0);
   require(owned.lower_bound(5) == 1, "Source mutation changed tree");
   require(owned.lower_bound_count(5) == 1, "Source mutation changed counting search");
+  require(owned.lower_bound_mask(5) == 1, "Source mutation changed mask search");
   auto copy = owned;
   auto moved = std::move(copy);
   require(moved.lower_bound(6) == 3, "Move lost data");
