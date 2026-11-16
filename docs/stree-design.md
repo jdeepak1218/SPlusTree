@@ -110,3 +110,8 @@ see `docs/stree-counting.md` for code and `docs/count-results.md` for measuremen
 `lower_bound_mask` instead forms ordered comparison bits and locates the first
 set bit with a trailing-zero count. It has an AVX2 backend for sixteen-key nodes
 and a portable fallback. See `docs/stree-mask.md` and `docs/mask-results.md`.
+
+`lower_bound_popcount` forms bits for keys strictly below the query and counts
+those bits. It preserves the full unsigned range and uses hardware population
+count when enabled by the compiler target. See `docs/stree-popcount.md` and
+`docs/popcount-results.md`.

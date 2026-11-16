@@ -126,3 +126,28 @@ Temporary mutations reversing upper-half placement, removing the end marker,
 and using signed SIMD minimum were detected. No mutants are retained. Header
 integration checks also pass with the mask API. Sanitizer limitations and
 untested platform/allocation-failure cases remain as described above.
+
+## Population-count search
+
+The current suite checks early exit, counting, trailing-zero masks, and population
+counts against the reference for 4,697,951 query cases across 3,777 datasets.
+There are 51 new explicit population assertions for every possible lane count,
+zero/full masks, half-vector boundaries, and maximum keys, alongside the existing
+51 trailing-zero assertions. Ownership, move, and assignment calls include the
+new API.
+
+```bash
+g++ -std=c++20 -O3 -mavx2 -mpopcnt -DNDEBUG -Wall -Wextra -Wpedantic -Wconversion -Iinclude tests/stree_test.cpp -o build/stree_test_popcount
+./build/stree_test_popcount
+g++ -std=c++20 -O3 -mavx2 -mno-popcnt -DNDEBUG -Wall -Wextra -Wpedantic -Wconversion -Iinclude tests/stree_test.cpp -o build/stree_test_software_popcount
+./build/stree_test_software_popcount
+g++ -std=c++20 -O3 -mavx2 -mpopcnt -DSST_DISABLE_MASK_SIMD -DNDEBUG -Wall -Wextra -Wpedantic -Wconversion -Iinclude tests/stree_test.cpp -o build/stree_test_popcount_fallback
+./build/stree_test_popcount_fallback
+```
+
+Add `-mavx2 -mpopcnt` to the sanitizer command for the explicit backend. Generic,
+hardware-popcount, software-popcount, backend-disabled, and ASan/UBSan builds
+pass. Existing reference and Eytzinger checks pass. Mutations carrying an end
+marker into the count, overlapping half masks, and using a 31-bit-only signed
+comparison were detected. Header-integration checks pass. No temporary mutants
+are retained. Existing sanitizer/platform limitations still apply.

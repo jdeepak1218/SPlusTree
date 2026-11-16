@@ -163,3 +163,40 @@ The AVX2 mask backend is selected for sixteen-key nodes; other widths and generi
 builds use the portable ordered-bit loop. SIMD extracts one bit per 32-bit lane
 using register casts, not floating-point arithmetic. No extra persistent storage
 is allocated. See `docs/stree-mask.md` and `docs/mask-results.md` for details.
+
+## Population-count comparison
+
+The `popcount` mode compares six methods: standard lower bound, optimized
+Eytzinger, early-exit S+, counting S+, trailing-zero S+, and population-count S+.
+One million queries per pass, one warm-up, and twelve trials rotate every method
+through all six execution positions twice. Raw files retain all trials, min/max,
+and medians. Every output is compared against the reference outside timing.
+
+```bash
+g++ -std=c++20 -O3 -DNDEBUG -Wall -Wextra -Wpedantic -Wconversion -Iinclude benchmarks/search_benchmark.cpp -o build/search_benchmark
+g++ -std=c++20 -O3 -mavx2 -mpopcnt -DNDEBUG -Wall -Wextra -Wpedantic -Wconversion -Iinclude benchmarks/search_benchmark.cpp -o build/search_benchmark_popcount
+g++ -std=c++20 -O3 -mavx2 -mno-popcnt -DNDEBUG -Wall -Wextra -Wpedantic -Wconversion -Iinclude benchmarks/search_benchmark.cpp -o build/search_benchmark_software_popcount
+./build/search_benchmark uniform popcount > benchmarks/popcount_generic_uniform.csv
+./build/search_benchmark duplicates popcount > benchmarks/popcount_generic_duplicates.csv
+./build/search_benchmark equal popcount > benchmarks/popcount_generic_equal.csv
+./build/search_benchmark_popcount uniform popcount > benchmarks/popcount_avx2_uniform.csv
+./build/search_benchmark_popcount duplicates popcount > benchmarks/popcount_avx2_duplicates.csv
+./build/search_benchmark_popcount equal popcount > benchmarks/popcount_avx2_equal.csv
+./build/search_benchmark_popcount uniform popcount > benchmarks/popcount_avx2_uniform_repeat.csv
+./build/search_benchmark_software_popcount uniform popcount > benchmarks/popcount_software_uniform.csv
+```
+
+Execute sequentially and only run targeted binaries on a compatible CPU/OS.
+These eight commands perform 2,304 million measured searches and 192 million
+warm-up searches. The same workload matrix is retained. Hardware POPCNT is
+verified in the primary code generation; the `-mno-popcnt` control retains AVX2
+comparisons and calls a software helper for the bit count. On this GCC version,
+`-mavx2` enables POPCNT, so the explicit disabling flag is necessary for the
+control. CPU AVX2 and POPCNT support was checked before execution.
+
+The comparison preserves the full unsigned key range via a sign-bit transform
+before signed vector comparison. No marker bit is added. This stage retains the
+two half-mask extracts; compressed packing is a later experiment. Persistent
+storage and construction are shared across all S+ methods. Cross-build timing
+changes include other compiler effects and process variation. See
+`docs/stree-popcount.md` and `docs/popcount-results.md` for details.

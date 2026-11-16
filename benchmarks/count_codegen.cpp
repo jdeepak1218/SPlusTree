@@ -18,3 +18,9 @@ extern "C" std::size_t stree_mask_lookup(
 {
   return tree.lower_bound_mask(query);
 }
+
+extern "C" std::size_t stree_popcount_lookup(
+    const sst::STree<>& tree, std::uint32_t query) noexcept
+{
+  return tree.lower_bound_popcount(query);
+}

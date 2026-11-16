@@ -27,11 +27,13 @@ void verify(const std::vector<std::uint32_t>& values, std::size_t samples = 128)
     const auto actual = tree.lower_bound(q);
     const auto counted = tree.lower_bound_count(q);
     const auto masked = tree.lower_bound_mask(q);
-    if (expected != actual || counted != expected || masked != expected) {
+    const auto population = tree.lower_bound_popcount(q);
+    if (expected != actual || counted != expected || masked != expected || population != expected) {
       throw std::runtime_error("Mismatch: B=" + std::to_string(B)
           + " n=" + std::to_string(values.size()) + " query=" + std::to_string(q)
           + " expected=" + std::to_string(expected) + " early=" + std::to_string(actual)
-          + " count=" + std::to_string(counted) + " mask=" + std::to_string(masked));
+          + " count=" + std::to_string(counted) + " mask=" + std::to_string(masked)
+          + " popcount=" + std::to_string(population));
     }
     ++queries;
   };
@@ -155,6 +157,9 @@ try {
     require(lane_tree.lower_bound_mask(0) == 0, "All-match mask failed");
     require(lane_tree.lower_bound_mask(1) == split, "Lane order or end marker failed");
     require(lane_tree.lower_bound_mask(maximum) == split, "Unsigned mask failed");
+    require(lane_tree.lower_bound_popcount(0) == 0, "Empty population mask failed");
+    require(lane_tree.lower_bound_popcount(1) == split, "Population lane count failed");
+    require(lane_tree.lower_bound_popcount(maximum) == split, "Unsigned population mask failed");
   }
   values = {2, 5, 5, 9};
   const sst::STree<> owned(values);
@@ -162,11 +167,14 @@ try {
   require(owned.lower_bound(5) == 1, "Source mutation changed tree");
   require(owned.lower_bound_count(5) == 1, "Source mutation changed counting search");
   require(owned.lower_bound_mask(5) == 1, "Source mutation changed mask search");
+  require(owned.lower_bound_popcount(5) == 1, "Source mutation changed population search");
   auto copy = owned;
   auto moved = std::move(copy);
   require(moved.lower_bound(6) == 3, "Move lost data");
+  require(moved.lower_bound_popcount(6) == 3, "Move lost population data");
   copy = owned;
   require(copy.lower_bound(10) == 4, "Copy assignment lost data");
+  require(copy.lower_bound_popcount(10) == 4, "Copy assignment lost population data");
 
   std::cout << "PASS: " << datasets << " datasets, " << queries
             << " differential queries; rejection, leaf-spill, duplicates, ownership checks passed\n";

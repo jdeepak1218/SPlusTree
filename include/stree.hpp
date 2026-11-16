@@ -116,6 +116,19 @@ public:
     return std::min(n, node * KeysPerNode + slot);
   }
 
+  std::size_t lower_bound_popcount(std::uint32_t query) const noexcept
+  {
+    const auto n = size();
+    if (n == 0) return 0;
+    std::size_t node = 0;
+    for (std::size_t level = 0; level + 1 < offsets_.size(); ++level) {
+      const auto child = find_popcount(nodes_[offsets_[level] + node], query);
+      node = node * fanout + child;
+    }
+    const auto slot = find_popcount(nodes_[offsets_.back() + node], query);
+    return std::min(n, node * KeysPerNode + slot);
+  }
+
 private:
   std::size_t size_ = 0;
   std::vector<Node> nodes_;
@@ -172,6 +185,31 @@ private:
     // A marker returns the node width when no real lane qualifies; never scan zero.
     mask |= std::uint32_t{1} << KeysPerNode;
     return static_cast<std::size_t>(std::countr_zero(mask));
+  }
+
+  static std::size_t find_popcount(const Node& node, std::uint32_t query) noexcept
+  {
+    std::uint32_t mask = 0;
+#if defined(__AVX2__) && (defined(__x86_64__) || defined(__i386__)) && !defined(SST_DISABLE_MASK_SIMD)
+    if constexpr (KeysPerNode == 16) {
+      // Flip the sign bit so signed SIMD ordering matches unsigned key ordering.
+      const auto bias = _mm256_set1_epi32(std::numeric_limits<std::int32_t>::min());
+      const auto q = _mm256_set1_epi32(std::bit_cast<std::int32_t>(query ^ 0x80000000U));
+      const auto low = _mm256_load_si256(reinterpret_cast<const __m256i*>(node.keys.data()));
+      const auto high = _mm256_load_si256(reinterpret_cast<const __m256i*>(node.keys.data() + 8));
+      const auto low_below = _mm256_cmpgt_epi32(q, _mm256_xor_si256(low, bias));
+      const auto high_below = _mm256_cmpgt_epi32(q, _mm256_xor_si256(high, bias));
+      mask = static_cast<std::uint32_t>(_mm256_movemask_ps(_mm256_castsi256_ps(low_below)))
+           | (static_cast<std::uint32_t>(_mm256_movemask_ps(_mm256_castsi256_ps(high_below))) << 8);
+    } else
+#endif
+    {
+      for (std::size_t i = 0; i < KeysPerNode; ++i) {
+        mask |= static_cast<std::uint32_t>(node.keys[i] < query) << i;
+      }
+    }
+    // Exactly one bit per real key; no end marker or lane-order restoration.
+    return static_cast<std::size_t>(std::popcount(mask));
   }
 };
 
