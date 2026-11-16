@@ -184,3 +184,13 @@ four release configurations, and ASan/UBSan. See
 under `-DNDEBUG`. Raw validation output is in
 `benchmarks/workload-validation.txt`. ThreadSanitizer could not start in this
 WSL environment; leak checking is disabled for sanitizer runs.
+
+## Batched lookup
+
+`batch_test.cpp` verifies fixed arrays and arbitrary spans against the reference
+and individual packed lookup. It covers all node widths, batch sizes 1 through
+128 plus size 3, tails, guards, invalid output lengths, ownership, and concurrent
+readers. The validation runner includes it in all four release configurations
+and ASan/UBSan. An optional dataset argument checks the full real-key index.
+See [batch behavior and commands](../docs/stree-batching.md) and
+[measured results](../docs/batch-results.md).

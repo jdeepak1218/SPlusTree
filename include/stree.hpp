@@ -6,6 +6,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <limits>
+#include <span>
 #include <stdexcept>
 #include <utility>
 #include <vector>
@@ -140,6 +141,54 @@ public:
     }
     const auto slot = find_packed(nodes_[offsets_.back() + node], query);
     return std::min(n, node * KeysPerNode + slot);
+  }
+
+  template<std::size_t BatchSize>
+  std::array<std::size_t, BatchSize> lower_bound_batch(
+      const std::array<std::uint32_t, BatchSize>& queries) const noexcept
+  {
+    static_assert(BatchSize > 0);
+    std::array<std::size_t, BatchSize> positions{};
+    std::array<std::size_t, BatchSize> results{};
+    const auto n = size();
+    if (n == 0) return results;
+
+    // Advance all independent queries before proceeding to the next level.
+    for (std::size_t level = 0; level + 1 < offsets_.size(); ++level) {
+      const auto offset = offsets_[level];
+      for (std::size_t i = 0; i < BatchSize; ++i) {
+        const auto& node = nodes_[offset + positions[i]];
+        const auto child = find_packed(node, queries[i]);
+        positions[i] = positions[i] * fanout + child;
+      }
+    }
+    const auto leaf_offset = offsets_.back();
+    for (std::size_t i = 0; i < BatchSize; ++i) {
+      const auto& leaf = nodes_[leaf_offset + positions[i]];
+      const auto slot = find_packed(leaf, queries[i]);
+      results[i] = std::min(n, positions[i] * KeysPerNode + slot);
+    }
+    return results;
+  }
+
+  // Query and output spans must have equal lengths and must not overlap.
+  template<std::size_t BatchSize>
+  void lower_bound_batch(std::span<const std::uint32_t> queries,
+                        std::span<std::size_t> results) const
+  {
+    static_assert(BatchSize > 0);
+    if (queries.size() != results.size()) {
+      throw std::invalid_argument("Batch query and output lengths must match");
+    }
+    std::array<std::uint32_t, BatchSize> batch{};
+    std::size_t offset = 0;
+    while (queries.size() - offset >= BatchSize) {
+      std::copy_n(queries.begin() + static_cast<std::ptrdiff_t>(offset), BatchSize, batch.begin());
+      const auto answers = lower_bound_batch(batch);
+      std::copy(answers.begin(), answers.end(), results.begin() + static_cast<std::ptrdiff_t>(offset));
+      offset += BatchSize;
+    }
+    for (; offset < queries.size(); ++offset) results[offset] = lower_bound_packed(queries[offset]);
   }
 
 private:

@@ -1,0 +1,3 @@
+Mutation: skip final tail output
+Exit: 1
+FAIL: Batch mismatch B=1 P=3 n=0 q=41828096 expected=0 actual=18446744073709551615

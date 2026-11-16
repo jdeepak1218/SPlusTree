@@ -246,3 +246,13 @@ Run `bash tools/run_workload_benchmarks.sh` after preparing the ignored dataset.
 See [reproduction and methodology](../docs/workload-validation.md) and
 [results](../docs/workload-results.md). CSV names start with `workloads_`;
 `real_dataset.json` records the real input hashes and transformation.
+
+## Batching
+
+Run `bash tools/run_batch_benchmarks.sh` with the prepared chromosome dataset
+available, then `python3 tools/check_batch_results.py`. The runner preserves
+previous results and writes six `batch_*_real.csv` / `batch_*_synthetic.csv`
+files. It compares standard search, counting, individual packed lookup, and
+batch sizes 1/2/4/8/16/32/64/128 across 31 cases, with eleven trials and a
+query count that exercises incomplete batches. See
+[methodology](../docs/stree-batching.md) and [results](../docs/batch-results.md).

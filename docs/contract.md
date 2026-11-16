@@ -67,6 +67,13 @@ Each batch result must equal an individual lower-bound lookup for the
 corresponding query. Results preserve query order. An empty batch produces no
 results.
 
+`STree::lower_bound_batch` supports fixed `std::array` batches and arbitrary
+query/output spans. Batch size is a positive compile-time constant. Span lengths
+must match, and their storage must not overlap. A length mismatch throws
+`std::invalid_argument` before writing output. The caller supplies valid output
+storage; concurrent calls must use separate output spans. Both overloads
+preserve the index-returning search contract and allocate no heap storage.
+
 ## Correctness reference
 
 For valid sorted input, results must agree with

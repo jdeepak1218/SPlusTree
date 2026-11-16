@@ -19,13 +19,13 @@ for config in generic avx2 fallback software_popcount; do
     fallback) flags=(-mavx2 -mpopcnt -DSST_DISABLE_MASK_SIMD) ;;
     software_popcount) flags=(-mavx2 -mno-popcnt) ;;
   esac
-  for name in stree robustness; do
+  for name in stree robustness batch; do
     echo "Checking $config / $name"
     "$cxx" "${common[@]}" -O3 -DNDEBUG "${flags[@]}" "tests/${name}_test.cpp" -o "build/validation/${name}_$config"
     "build/validation/${name}_$config"
   done
 done
-for name in reference eytzinger stree robustness workload_data; do
+for name in reference eytzinger stree robustness workload_data batch; do
   echo "Checking ASan + UBSan / $name"
   "$cxx" "${common[@]}" -O1 -g -mavx2 -mpopcnt -D_GLIBCXX_ASSERTIONS \
     -fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer \
