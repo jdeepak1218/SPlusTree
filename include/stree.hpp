@@ -5,6 +5,7 @@
 #include <bit>
 #include <cstddef>
 #include <cstdint>
+#include <initializer_list>
 #include <limits>
 #include <span>
 #include <stdexcept>
@@ -27,7 +28,11 @@ class STree {
   static_assert(sizeof(Node) == 64);
 
 public:
-  explicit STree(const std::vector<std::uint32_t>& values) : size_(values.size())
+  explicit STree(const std::vector<std::uint32_t>& values)
+      : STree(std::span<const std::uint32_t>(values)) {}
+
+  template<std::size_t Extent>
+  explicit STree(std::span<const std::uint32_t, Extent> values) : size_(values.size())
   {
     if (!std::is_sorted(values.begin(), values.end())) {
       throw std::invalid_argument("STree input must be sorted");
@@ -333,6 +338,50 @@ private:
       return find_popcount(node, query);
     }
   }
+};
+
+// Owning index with automatic compile-time backend selection.
+// Lower-bound results are sorted-input positions; size() means no result.
+class StaticSearchTree {
+public:
+  explicit StaticSearchTree(std::span<const std::uint32_t> sorted_keys = {})
+      : tree_(sorted_keys) {}
+
+  explicit StaticSearchTree(std::initializer_list<std::uint32_t> sorted_keys)
+      : StaticSearchTree(std::span<const std::uint32_t>(sorted_keys.begin(), sorted_keys.size())) {}
+
+  std::size_t size() const noexcept { return tree_.size(); }
+  bool empty() const noexcept { return size() == 0; }
+  std::size_t storage_bytes() const noexcept { return tree_.storage_bytes(); }
+
+  std::size_t lower_bound(std::uint32_t query) const noexcept
+  {
+    return tree_.lower_bound_count(query);
+  }
+
+  std::vector<std::size_t> lower_bound_batch(std::span<const std::uint32_t> queries) const
+  {
+    std::vector<std::size_t> results(queries.size());
+    lower_bound_batch(queries, results);
+    return results;
+  }
+
+  // Equal-length, non-overlapping spans; caller-owned output avoids allocation.
+  void lower_bound_batch(std::span<const std::uint32_t> queries,
+                        std::span<std::size_t> results) const
+  {
+    if (queries.size() != results.size()) {
+      throw std::invalid_argument("Batch query and output lengths must match");
+    }
+#if defined(__AVX2__) && defined(__POPCNT__) && (defined(__x86_64__) || defined(__i386__)) && !defined(SST_DISABLE_MASK_SIMD)
+    tree_.lower_bound_batch_prefetch<32>(queries, results);
+#else
+    for (std::size_t i = 0; i < queries.size(); ++i) results[i] = tree_.lower_bound_count(queries[i]);
+#endif
+  }
+
+private:
+  STree<16> tree_;
 };
 
 } // namespace sst

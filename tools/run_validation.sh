@@ -20,13 +20,13 @@ for config in generic avx2 fallback software_popcount no_prefetch; do
     no_prefetch) flags=(-mavx2 -mpopcnt -DSST_DISABLE_PREFETCH) ;;
     software_popcount) flags=(-mavx2 -mno-popcnt) ;;
   esac
-  for name in stree robustness batch; do
+  for name in stree robustness batch api; do
     echo "Checking $config / $name"
     "$cxx" "${common[@]}" -O3 -DNDEBUG "${flags[@]}" "tests/${name}_test.cpp" -o "build/validation/${name}_$config"
     "build/validation/${name}_$config"
   done
 done
-for name in reference eytzinger stree robustness workload_data batch; do
+for name in reference eytzinger stree robustness workload_data batch api; do
   echo "Checking ASan + UBSan / $name"
   "$cxx" "${common[@]}" -O1 -g -mavx2 -mpopcnt -D_GLIBCXX_ASSERTIONS \
     -fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer \

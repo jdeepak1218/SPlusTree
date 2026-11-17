@@ -3,6 +3,17 @@
 This document defines the behavior that the reference implementation and every
 optimized search implementation must share.
 
+## Simple public interface
+
+`sst::StaticSearchTree` in the standalone `stree.hpp` is the recommended entry
+point. `lower_bound` returns an index; `lower_bound_batch` either returns an
+allocated vector of indices or fills caller-owned output. Both obey the same
+lower-bound, ownership, ordering and range rules below. The caller-buffer form
+requires equal-length non-overlapping spans and writes nothing on a length
+mismatch. It allocates no heap storage; the convenience form allocates its result.
+The implementation and batch size are selected by the build, with no runtime CPU
+dispatch. Existing `STree` methods retain their behavior.
+
 ## Input
 
 - Keys and queries use `std::uint32_t`.
@@ -11,7 +22,7 @@ optimized search implementation must share.
 - The full unsigned 32-bit range is valid, including `0` and `UINT32_MAX`.
 - Sorted input is a precondition.
 
-The Eytzinger implementation checks this precondition during construction and
+The tree implementations check this precondition during construction and
 throws `std::invalid_argument` for unsorted input. Its queries do not repeat
 the validation. The standalone binary-search baselines require sorted input
 and do not validate it.

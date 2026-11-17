@@ -18,8 +18,8 @@ If LeakSanitizer reports that it cannot run under ptrace, use
 `ASAN_OPTIONS=detect_leaks=0 ./build/eytzinger_test_sanitized`.
 This retains address and undefined-behavior checks but does not check for leaks.
 
-Keep assertions enabled in `reference_test.cpp`. The dedicated Eytzinger suite
-uses explicit failure checks that remain active even with `-DNDEBUG`.
+Reference and dedicated suites use explicit failure checks that remain active
+with `-DNDEBUG`.
 
 ## Coverage
 
@@ -204,3 +204,11 @@ results each on all 39,159,057 real keys. Code-generation inspection confirms
 hints are emitted and disappear under the disable macro. See
 [behavior and commands](../docs/stree-batch-prefetch.md) and
 [results](../docs/batch-prefetch-results.md).
+
+## Simple public API
+
+`api_test.cpp` checks the non-template `StaticSearchTree` interface, allocating
+and caller-buffer batch overloads, construction from contiguous inputs, source
+ownership, copy/move operations, duplicates, full-range keys, invalid lengths,
+empty inputs, batch tails, and concurrent reads. It is included in every release
+configuration and the sanitizer runner. See [API validation](../docs/simple-api.md).
