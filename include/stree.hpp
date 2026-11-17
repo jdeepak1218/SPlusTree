@@ -1,3 +1,28 @@
+/*
+MIT License
+
+Copyright (c) 2026 SPlusTree contributors
+Copyright (c) 2025 Ragnar Groot Koerkamp
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+*/
+
 #pragma once
 
 #include <algorithm>
@@ -82,70 +107,35 @@ public:
     return nodes_.capacity() * sizeof(Node) + offsets_.capacity() * sizeof(std::size_t);
   }
 
+  std::uint32_t key_at(std::size_t index) const
+  {
+    if (index >= size()) throw std::out_of_range("Key index out of range");
+    return nodes_[offsets_.back() + index / KeysPerNode].keys[index % KeysPerNode];
+  }
+
   std::size_t lower_bound(std::uint32_t query) const noexcept
   {
-    const auto n = size();
-    if (n == 0) return 0;
-    std::size_t node = 0;
-    for (std::size_t level = 0; level + 1 < offsets_.size(); ++level) {
-      const auto child = find_linear(nodes_[offsets_[level] + node], query);
-      node = node * fanout + child;
-    }
-    const auto slot = find_linear(nodes_[offsets_.back() + node], query);
-    // A slot equal to KeysPerNode intentionally spills to the next leaf.
-    return std::min(n, node * KeysPerNode + slot);
+    return lower_bound_impl<find_linear>(query);
   }
 
   std::size_t lower_bound_count(std::uint32_t query) const noexcept
   {
-    const auto n = size();
-    if (n == 0) return 0;
-    std::size_t node = 0;
-    for (std::size_t level = 0; level + 1 < offsets_.size(); ++level) {
-      const auto child = find_count(nodes_[offsets_[level] + node], query);
-      node = node * fanout + child;
-    }
-    const auto slot = find_count(nodes_[offsets_.back() + node], query);
-    return std::min(n, node * KeysPerNode + slot);
+    return lower_bound_impl<find_count>(query);
   }
 
   std::size_t lower_bound_mask(std::uint32_t query) const noexcept
   {
-    const auto n = size();
-    if (n == 0) return 0;
-    std::size_t node = 0;
-    for (std::size_t level = 0; level + 1 < offsets_.size(); ++level) {
-      const auto child = find_mask(nodes_[offsets_[level] + node], query);
-      node = node * fanout + child;
-    }
-    const auto slot = find_mask(nodes_[offsets_.back() + node], query);
-    return std::min(n, node * KeysPerNode + slot);
+    return lower_bound_impl<find_mask>(query);
   }
 
   std::size_t lower_bound_popcount(std::uint32_t query) const noexcept
   {
-    const auto n = size();
-    if (n == 0) return 0;
-    std::size_t node = 0;
-    for (std::size_t level = 0; level + 1 < offsets_.size(); ++level) {
-      const auto child = find_popcount(nodes_[offsets_[level] + node], query);
-      node = node * fanout + child;
-    }
-    const auto slot = find_popcount(nodes_[offsets_.back() + node], query);
-    return std::min(n, node * KeysPerNode + slot);
+    return lower_bound_impl<find_popcount>(query);
   }
 
   std::size_t lower_bound_packed(std::uint32_t query) const noexcept
   {
-    const auto n = size();
-    if (n == 0) return 0;
-    std::size_t node = 0;
-    for (std::size_t level = 0; level + 1 < offsets_.size(); ++level) {
-      const auto child = find_packed(nodes_[offsets_[level] + node], query);
-      node = node * fanout + child;
-    }
-    const auto slot = find_packed(nodes_[offsets_.back() + node], query);
-    return std::min(n, node * KeysPerNode + slot);
+    return lower_bound_impl<find_packed>(query);
   }
 
   template<std::size_t BatchSize>
@@ -178,6 +168,21 @@ public:
   }
 
 private:
+  template<auto Find>
+  std::size_t lower_bound_impl(std::uint32_t query) const noexcept
+  {
+    const auto n = size();
+    if (n == 0) return 0;
+    std::size_t node = 0;
+    for (std::size_t level = 0; level + 1 < offsets_.size(); ++level) {
+      const auto child = Find(nodes_[offsets_[level] + node], query);
+      node = node * fanout + child;
+    }
+    const auto slot = Find(nodes_[offsets_.back() + node], query);
+    // A slot equal to KeysPerNode intentionally spills to the next leaf.
+    return std::min(n, node * KeysPerNode + slot);
+  }
+
   template<std::size_t BatchSize, bool Prefetch>
   std::array<std::size_t, BatchSize> batch_impl(
       const std::array<std::uint32_t, BatchSize>& queries) const noexcept
@@ -357,6 +362,14 @@ public:
   std::size_t lower_bound(std::uint32_t query) const noexcept
   {
     return tree_.lower_bound_count(query);
+  }
+
+  std::uint32_t key_at(std::size_t index) const { return tree_.key_at(index); }
+
+  bool contains(std::uint32_t query) const noexcept
+  {
+    const auto index = lower_bound(query);
+    return index < size() && tree_.key_at(index) == query;
   }
 
   std::vector<std::size_t> lower_bound_batch(std::span<const std::uint32_t> queries) const

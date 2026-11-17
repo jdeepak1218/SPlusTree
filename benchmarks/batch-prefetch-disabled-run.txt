@@ -1,9 +1,0 @@
-PASS chr22_16mers/mixed n=1048576
-PASS chr22_16mers/hot n=1048576
-PASS chr22_16mers/sorted n=1048576
-PASS chr22_16mers/mixed n=8388608
-PASS chr22_16mers/hot n=8388608
-PASS chr22_16mers/sorted n=8388608
-PASS chr22_16mers/mixed n=39159057
-PASS chr22_16mers/hot n=39159057
-PASS chr22_16mers/sorted n=39159057

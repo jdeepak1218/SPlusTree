@@ -1,5 +1,5 @@
 #include "stree.hpp"
-#include "static_search_tree.hpp"
+#include "../benchmarks/baselines/lower_bound.hpp"
 
 #include <iostream>
 #include <random>

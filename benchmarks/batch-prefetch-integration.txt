@@ -1,1 +1,0 @@
-PASS standalone/repeated header, two translation units, array noexcept, span tails, generic/AVX2/disabled hints, zero batch rejection

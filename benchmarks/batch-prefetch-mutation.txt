@@ -1,3 +1,0 @@
-Mutation: shift prefetched leaf results by one
-Exit: 1
-FAIL: Batch mismatch B=1 P=3 n=1 q=0 expected=0 actual=1

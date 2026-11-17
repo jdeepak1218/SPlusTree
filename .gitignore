@@ -37,8 +37,10 @@ Desktop.ini
 # Downloaded and derived benchmark datasets
 /data/
 
-# Local reference material
-/third_party/
+# Generated benchmark results (historical data is on results-archive)
+/results/
+/benchmarks/*.csv
+/benchmarks/*.txt
 
 # Local scripting helpers are not part of the repository
 /tools/*.py

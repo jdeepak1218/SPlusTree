@@ -1,5 +1,6 @@
 #include "stree.hpp"
-#include "static_search_tree.hpp"
+#include "baselines/eytzinger.hpp"
+#include "baselines/lower_bound.hpp"
 #include "workloads.hpp"
 
 #include <chrono>
@@ -14,18 +15,25 @@ constexpr std::size_t query_count = 131075;
 constexpr std::array names{"std", "count", "packed", "batch_1", "batch_2", "batch_4",
                            "batch_8", "batch_16", "batch_32", "batch_64", "batch_128",
                            "prefetch_1", "prefetch_2", "prefetch_4", "prefetch_8",
-                           "prefetch_16", "prefetch_32", "prefetch_64", "prefetch_128"};
+                           "prefetch_16", "prefetch_32", "prefetch_64", "prefetch_128", "eytzinger_prefetch"};
 constexpr std::array<std::size_t, 19> batch_sizes{0, 0, 0, 1, 2, 4, 8, 16, 32, 64, 128, 1, 2, 4, 8, 16, 32, 64, 128};
 
 template<bool ComparePrefetch>
 void run(const workloads::Keys& keys, const std::string& dataset, const std::string& pattern)
 {
-  constexpr std::size_t method_count = ComparePrefetch ? 19 : 11;
-  constexpr std::size_t trials = ComparePrefetch ? 12 : 11;
+  constexpr std::size_t method_count = ComparePrefetch ? 20 : 12;
+  constexpr std::size_t trials = 12;
+  constexpr std::size_t eytzinger_method = method_count - 1;
+  const auto method_name = [&](std::size_t method) {
+    return method == eytzinger_method ? "eytzinger_prefetch" : names[method];
+  };
   const auto queries = workloads::make_queries(keys, query_count, pattern, 20261116);
   const auto build_start = Clock::now();
   const sst::STree<> tree(keys);
   const double build_ms = std::chrono::duration<double, std::milli>(Clock::now() - build_start).count();
+  const auto eytzinger_start = Clock::now();
+  const sst::Eytzinger eytzinger(keys);
+  const double eytzinger_build_ms = std::chrono::duration<double, std::milli>(Clock::now() - eytzinger_start).count();
   std::vector<std::size_t> expected, output(queries.size());
   std::uint64_t checksum = 0;
   std::size_t hits = 0;
@@ -47,7 +55,7 @@ void run(const workloads::Keys& keys, const std::string& dataset, const std::str
       if (index != expected[i] || index > keys.size()
           || (index < keys.size() && keys[index] < queries[i])
           || (index > 0 && keys[index - 1] >= queries[i])) {
-        throw std::runtime_error(dataset + "/" + pattern + " method=" + names[method]
+        throw std::runtime_error(dataset + "/" + pattern + " method=" + method_name(method)
             + " query=" + std::to_string(queries[i]) + " expected=" + std::to_string(expected[i])
             + " actual=" + std::to_string(index));
       }
@@ -56,6 +64,12 @@ void run(const workloads::Keys& keys, const std::string& dataset, const std::str
         std::chrono::duration<double, std::nano>(finish - start).count() / static_cast<double>(queries.size());
   };
   const auto dispatch = [&](std::size_t method, int trial) {
+    if (method == eytzinger_method) {
+      measure([&] {
+        for (std::size_t i = 0; i < queries.size(); ++i) output[i] = eytzinger.lower_bound_optimized(queries[i]);
+      }, method, trial);
+      return;
+    }
     switch (method) {
       case 0: measure([&] {
         for (std::size_t i = 0; i < queries.size(); ++i) output[i] = sst::reference_lower_bound(keys, queries[i]);
@@ -117,11 +131,12 @@ void run(const workloads::Keys& keys, const std::string& dataset, const std::str
   for (std::size_t method = 0; method < method_count; ++method) {
     auto sorted = samples[method];
     std::sort(sorted.begin(), sorted.end());
-    std::cout << dataset << ',' << pattern << ',' << keys.size() << ',' << names[method]
-              << ',' << batch_sizes[method] << ',' << queries.size() << ',' << hits << ',' << trials
+    std::cout << dataset << ',' << pattern << ',' << keys.size() << ',' << method_name(method)
+              << ',' << (method == eytzinger_method ? 0 : batch_sizes[method]) << ',' << queries.size() << ',' << hits << ',' << trials
               << ',' << (sorted[(trials - 1) / 2] + sorted[trials / 2]) / 2 << ',' << sorted.front() << ',' << sorted.back()
-              << ',' << checksum << ',' << (method == 0 ? keys.size() * sizeof(std::uint32_t) : tree.storage_bytes())
-              << ',' << (method == 0 ? 0 : build_ms);
+              << ',' << checksum << ',' << (method == 0 ? keys.size() * sizeof(std::uint32_t)
+                       : (method == eytzinger_method ? eytzinger.storage_bytes() : tree.storage_bytes()))
+              << ',' << (method == 0 ? 0 : (method == eytzinger_method ? eytzinger_build_ms : build_ms));
     for (auto sample : samples[method]) std::cout << ',' << sample;
     std::cout << '\n';
   }
@@ -136,7 +151,7 @@ try {
   if (argc > (compare_prefetch ? 3 : 2)) throw std::runtime_error("Usage: batch_benchmark [--prefetch] [16mer-u32le-file]");
   const char* dataset = argc > (compare_prefetch ? 2 : 1) ? argv[compare_prefetch ? 2 : 1] : nullptr;
   const auto execute = [&]<bool ComparePrefetch>() {
-  constexpr std::size_t trials = ComparePrefetch ? 12 : 11;
+  constexpr std::size_t trials = 12;
   std::cout << std::fixed << std::setprecision(3)
       << "dataset,pattern,n,method,batch_size,queries,hits,trials,median_ns,min_ns,max_ns,checksum,storage_bytes,build_ms";
   for (std::size_t i = 0; i < trials; ++i) std::cout << ",trial_" << i << "_ns";

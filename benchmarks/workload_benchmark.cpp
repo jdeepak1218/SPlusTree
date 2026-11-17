@@ -1,5 +1,5 @@
-#include "eytzinger.hpp"
-#include "static_search_tree.hpp"
+#include "baselines/eytzinger.hpp"
+#include "baselines/lower_bound.hpp"
 #include "stree.hpp"
 #include "workloads.hpp"
 

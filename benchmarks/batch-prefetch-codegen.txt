@@ -1,1 +1,0 @@
-PASS enabled assembly contains prefetcht0; SST_DISABLE_PREFETCH assembly contains no prefetcht0

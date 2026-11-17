@@ -21,6 +21,15 @@ void verify(const std::vector<std::uint32_t>& keys, const std::vector<std::uint3
   const sst::StaticSearchTree tree(keys);
   require(tree.size() == keys.size(), "Size mismatch");
   require(tree.empty() == keys.empty(), "Empty mismatch");
+  for (std::size_t i = 0; i < keys.size(); ++i) {
+    require(tree.key_at(i) == keys[i], "Owned key accessor mismatch");
+  }
+  for (auto index : {keys.size(), guard}) {
+    bool rejected = false;
+    try { (void)tree.key_at(index); }
+    catch (const std::out_of_range&) { rejected = true; }
+    require(rejected, "Invalid key index accepted");
+  }
   const auto allocated = tree.lower_bound_batch(queries);
   std::vector<std::size_t> guarded(queries.size() + 2, guard);
   tree.lower_bound_batch(queries, std::span<std::size_t>(guarded).subspan(1, queries.size()));
@@ -30,6 +39,8 @@ void verify(const std::vector<std::uint32_t>& keys, const std::vector<std::uint3
     const auto expected = static_cast<std::size_t>(std::lower_bound(keys.begin(), keys.end(), queries[i]) - keys.begin());
     const auto actual = tree.lower_bound(queries[i]);
     require(actual == expected, "Individual lookup mismatch");
+    require(tree.contains(queries[i]) == (expected < keys.size() && keys[expected] == queries[i]),
+            "Membership mismatch");
     require(allocated[i] == expected && guarded[i + 1] == expected, "Batch lookup mismatch");
     require(actual <= keys.size() && (actual == keys.size() || keys[actual] >= queries[i])
         && (actual == 0 || keys[actual - 1] < queries[i]), "Lower-bound bracket mismatch");
@@ -70,13 +81,16 @@ void construction_and_ownership()
   vector.clear();
   vector.shrink_to_fit();
   require(from_vector.lower_bound(6) == 3 && from_mutable_view.lower_bound(5) == 1, "Source lifetime dependency");
+  require(from_vector.key_at(3) == 9 && from_vector.contains(5) && !from_vector.contains(6),
+          "Owned key lookup depends on source");
   auto copy = from_list;
   auto moved = std::move(copy);
   require(moved.lower_bound(6) == 3, "Move lost keys");
   copy = from_array;
   require(copy.lower_bound(5) == 1, "Copy assignment lost keys");
   moved = std::move(copy);
-  require(moved.lower_bound(14) == 4, "Move assignment lost keys");
+  require(moved.lower_bound(14) == 4 && moved.key_at(4) == 14 && moved.contains(5),
+          "Move assignment lost keys");
   const std::array<std::uint32_t, 4> queries{6, 5, 20, 0};
   require(moved.lower_bound_batch(queries) == std::vector<std::size_t>{3, 1, 5, 0}, "Documented example mismatch");
   bool rejected = false;

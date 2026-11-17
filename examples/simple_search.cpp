@@ -7,7 +7,7 @@ int main()
 {
   const sst::StaticSearchTree tree({2, 5, 5, 9, 14});
   const auto index = tree.lower_bound(6);
-  if (index != tree.size()) std::cout << "Lower-bound position for 6: " << index << '\n';
+  if (index != tree.size()) std::cout << "Lower-bound key for 6: " << tree.key_at(index) << '\n';
 
   const std::array<std::uint32_t, 4> queries{6, 5, 20, 0};
   const auto positions = tree.lower_bound_batch(queries);
