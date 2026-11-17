@@ -17,6 +17,9 @@ void exercise(const sst::STree<B>& tree, const workloads::Keys& keys,
   std::vector<std::size_t> output(queries.size() + 2, guard);
   tree.template lower_bound_batch<P>(queries, std::span<std::size_t>(output).subspan(1, queries.size()));
   if (output.front() != guard || output.back() != guard) throw std::runtime_error("Output guard overwritten");
+  std::vector<std::size_t> prefetched(queries.size() + 2, guard);
+  tree.template lower_bound_batch_prefetch<P>(queries, std::span<std::size_t>(prefetched).subspan(1, queries.size()));
+  if (prefetched.front() != guard || prefetched.back() != guard) throw std::runtime_error("Prefetch output guard overwritten");
   const auto check = [&](std::uint32_t query, std::size_t actual, std::size_t want) {
     if (actual != want || actual != tree.lower_bound_packed(query) || actual > keys.size()
         || (actual < keys.size() && keys[actual] < query)
@@ -27,17 +30,31 @@ void exercise(const sst::STree<B>& tree, const workloads::Keys& keys,
     }
     ++checked;
   };
-  for (std::size_t i = 0; i < queries.size(); ++i) check(queries[i], output[i + 1], expected[i]);
+  for (std::size_t i = 0; i < queries.size(); ++i) {
+    check(queries[i], output[i + 1], expected[i]);
+    check(queries[i], prefetched[i + 1], expected[i]);
+  }
   std::array<std::uint32_t, P> fixed{};
   for (std::size_t i = 0; i < P; ++i) fixed[i] = queries.empty() ? workloads::maximum : queries[i % queries.size()];
   const auto answers = tree.lower_bound_batch(fixed);
-  for (std::size_t i = 0; i < P; ++i) check(fixed[i], answers[i], sst::reference_lower_bound(keys, fixed[i]));
+  const auto prefetched_answers = tree.lower_bound_batch_prefetch(fixed);
+  for (std::size_t i = 0; i < P; ++i) {
+    const auto want = sst::reference_lower_bound(keys, fixed[i]);
+    check(fixed[i], answers[i], want);
+    check(fixed[i], prefetched_answers[i], want);
+  }
   bool rejected = false;
   const auto before_rejection = output;
   try { tree.template lower_bound_batch<P>(queries, std::span<std::size_t>(output).first(queries.size() + 1)); }
   catch (const std::invalid_argument&) { rejected = true; }
   if (!rejected || output != before_rejection) {
     throw std::runtime_error("Mismatched output span was not rejected before writing");
+  }
+  for (auto length : {queries.size() + 1, queries.empty() ? std::size_t{1} : queries.size() - 1}) {
+    rejected = false;
+    try { tree.template lower_bound_batch_prefetch<P>(queries, std::span<std::size_t>(output).first(length)); }
+    catch (const std::invalid_argument&) { rejected = true; }
+    if (!rejected || output != before_rejection) throw std::runtime_error("Prefetch length rejection modified output");
   }
 }
 
@@ -102,10 +119,16 @@ void concurrent_ownership()
   if (std::any_of(moved_output.begin(), moved_output.end(), [](auto index) { return index != 0; })) {
     throw std::runtime_error("Moved-from tree batch was not empty");
   }
+  copy.lower_bound_batch_prefetch<16>(queries, moved_output);
+  if (std::any_of(moved_output.begin(), moved_output.end(), [](auto index) { return index != 0; })) {
+    throw std::runtime_error("Moved-from prefetch tree was not empty");
+  }
   copy = tree;
   copy.lower_bound_batch<16>(queries, moved_output);
   if (moved_output != expected) throw std::runtime_error("Copy assignment lost batch data");
-  checked += 2 * queries.size();
+  copy.lower_bound_batch_prefetch<16>(queries, moved_output);
+  if (moved_output != expected) throw std::runtime_error("Copy assignment lost prefetch data");
+  checked += 4 * queries.size();
   original = sst::STree<>({});
   keys.clear();
   keys.shrink_to_fit();
@@ -115,10 +138,13 @@ void concurrent_ownership()
     std::vector<std::size_t> output(queries.size());
     tree.lower_bound_batch<16>(queries, output);
     if (output != expected) failed.store(true);
+    std::fill(output.begin(), output.end(), guard);
+    tree.lower_bound_batch_prefetch<16>(queries, output);
+    if (output != expected) failed.store(true);
   });
   for (auto& thread : threads) thread.join();
   if (failed.load()) throw std::runtime_error("Concurrent copied/moved batch tree failed");
-  checked += threads.size() * queries.size();
+  checked += 2 * threads.size() * queries.size();
 }
 } // namespace
 
@@ -149,6 +175,11 @@ try {
       tree.lower_bound_batch<16>(std::span<const std::uint32_t>(queries).subspan(1), output);
       for (std::size_t i = 0; i < n; ++i) {
         if (output[i] != tree.lower_bound_packed(queries[i + 1])) throw std::runtime_error("Input subspan mismatch");
+        ++checked;
+      }
+      tree.lower_bound_batch_prefetch<16>(std::span<const std::uint32_t>(queries).subspan(1), output);
+      for (std::size_t i = 0; i < n; ++i) {
+        if (output[i] != tree.lower_bound_packed(queries[i + 1])) throw std::runtime_error("Prefetch input subspan mismatch");
         ++checked;
       }
     }

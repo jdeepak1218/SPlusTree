@@ -74,6 +74,11 @@ must match, and their storage must not overlap. A length mismatch throws
 storage; concurrent calls must use separate output spans. Both overloads
 preserve the index-returning search contract and allocate no heap storage.
 
+The optional `lower_bound_batch_prefetch` array/span overloads have the same
+results, ordering, ownership, length, and non-overlap requirements as ordinary
+batch lookup. Prefetch hints do not affect the result contract. Their availability
+depends on the compiler and `SST_DISABLE_PREFETCH`.
+
 ## Correctness reference
 
 For valid sorted input, results must agree with

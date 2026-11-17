@@ -147,6 +147,36 @@ public:
   std::array<std::size_t, BatchSize> lower_bound_batch(
       const std::array<std::uint32_t, BatchSize>& queries) const noexcept
   {
+    return batch_impl<BatchSize, false>(queries);
+  }
+
+  template<std::size_t BatchSize>
+  std::array<std::size_t, BatchSize> lower_bound_batch_prefetch(
+      const std::array<std::uint32_t, BatchSize>& queries) const noexcept
+  {
+    return batch_impl<BatchSize, true>(queries);
+  }
+
+  // Query and output spans must have equal lengths and must not overlap.
+  template<std::size_t BatchSize>
+  void lower_bound_batch(std::span<const std::uint32_t> queries,
+                        std::span<std::size_t> results) const
+  {
+    batch_into<BatchSize, false>(queries, results);
+  }
+
+  template<std::size_t BatchSize>
+  void lower_bound_batch_prefetch(std::span<const std::uint32_t> queries,
+                        std::span<std::size_t> results) const
+  {
+    batch_into<BatchSize, true>(queries, results);
+  }
+
+private:
+  template<std::size_t BatchSize, bool Prefetch>
+  std::array<std::size_t, BatchSize> batch_impl(
+      const std::array<std::uint32_t, BatchSize>& queries) const noexcept
+  {
     static_assert(BatchSize > 0);
     std::array<std::size_t, BatchSize> positions{};
     std::array<std::size_t, BatchSize> results{};
@@ -160,6 +190,15 @@ public:
         const auto& node = nodes_[offset + positions[i]];
         const auto child = find_packed(node, queries[i]);
         positions[i] = positions[i] * fanout + child;
+#if (defined(__GNUC__) || defined(__clang__)) && !defined(SST_DISABLE_PREFETCH)
+        if constexpr (Prefetch) {
+          const auto next_offset = offsets_[level + 1];
+          // Check the index before forming a pointer, even for a non-faulting hint.
+          if (positions[i] < nodes_.size() - next_offset) {
+            __builtin_prefetch(nodes_.data() + next_offset + positions[i], 0, 3);
+          }
+        }
+#endif
       }
     }
     const auto leaf_offset = offsets_.back();
@@ -172,8 +211,8 @@ public:
   }
 
   // Query and output spans must have equal lengths and must not overlap.
-  template<std::size_t BatchSize>
-  void lower_bound_batch(std::span<const std::uint32_t> queries,
+  template<std::size_t BatchSize, bool Prefetch>
+  void batch_into(std::span<const std::uint32_t> queries,
                         std::span<std::size_t> results) const
   {
     static_assert(BatchSize > 0);
@@ -184,14 +223,13 @@ public:
     std::size_t offset = 0;
     while (queries.size() - offset >= BatchSize) {
       std::copy_n(queries.begin() + static_cast<std::ptrdiff_t>(offset), BatchSize, batch.begin());
-      const auto answers = lower_bound_batch(batch);
+      const auto answers = batch_impl<BatchSize, Prefetch>(batch);
       std::copy(answers.begin(), answers.end(), results.begin() + static_cast<std::ptrdiff_t>(offset));
       offset += BatchSize;
     }
     for (; offset < queries.size(); ++offset) results[offset] = lower_bound_packed(queries[offset]);
   }
 
-private:
   std::size_t size_ = 0;
   std::vector<Node> nodes_;
   std::vector<std::size_t> offsets_;

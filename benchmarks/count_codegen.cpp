@@ -30,3 +30,10 @@ extern "C" std::size_t stree_packed_lookup(
 {
   return tree.lower_bound_packed(query);
 }
+
+extern "C" void stree_batch_prefetch_lookup(
+    const sst::STree<>& tree, const std::array<std::uint32_t, 16>& queries,
+    std::array<std::size_t, 16>& results) noexcept
+{
+  results = tree.lower_bound_batch_prefetch(queries);
+}

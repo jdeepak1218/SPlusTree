@@ -256,3 +256,13 @@ files. It compares standard search, counting, individual packed lookup, and
 batch sizes 1/2/4/8/16/32/64/128 across 31 cases, with eleven trials and a
 query count that exercises incomplete batches. See
 [methodology](../docs/stree-batching.md) and [results](../docs/batch-results.md).
+
+## Batched prefetch comparison
+
+`bash tools/run_batch_prefetch_benchmarks.sh` compares matching ordinary and
+prefetched batch sizes, plus the existing baselines, across the same 31 cases.
+It uses twelve trials and preserves all older results. Run
+`python3 tools/check_batch_results.py --prefetch` to check the six new CSVs;
+if present, the additional generic hints-disabled real-data control is checked
+too. See [methodology](../docs/stree-batch-prefetch.md) and
+[measured results](../docs/batch-prefetch-results.md).

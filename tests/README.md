@@ -194,3 +194,13 @@ readers. The validation runner includes it in all four release configurations
 and ASan/UBSan. An optional dataset argument checks the full real-key index.
 See [batch behavior and commands](../docs/stree-batching.md) and
 [measured results](../docs/batch-results.md).
+
+## Batched prefetch validation
+
+The batch suite now checks both ordinary and prefetched fixed-array/span APIs:
+8,425,692 results per configuration. The runner also covers
+`SST_DISABLE_PREFETCH`. Separate release and ASan/UBSan runs check 9,439,464
+results each on all 39,159,057 real keys. Code-generation inspection confirms
+hints are emitted and disappear under the disable macro. See
+[behavior and commands](../docs/stree-batch-prefetch.md) and
+[results](../docs/batch-prefetch-results.md).

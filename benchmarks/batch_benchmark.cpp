@@ -6,16 +6,22 @@
 #include <iomanip>
 #include <iostream>
 #include <numeric>
+#include <string_view>
 
 namespace {
 using Clock = std::chrono::steady_clock;
-constexpr std::size_t query_count = 131075, method_count = 11, trials = 11;
+constexpr std::size_t query_count = 131075;
 constexpr std::array names{"std", "count", "packed", "batch_1", "batch_2", "batch_4",
-                           "batch_8", "batch_16", "batch_32", "batch_64", "batch_128"};
-constexpr std::array<std::size_t, method_count> batch_sizes{0, 0, 0, 1, 2, 4, 8, 16, 32, 64, 128};
+                           "batch_8", "batch_16", "batch_32", "batch_64", "batch_128",
+                           "prefetch_1", "prefetch_2", "prefetch_4", "prefetch_8",
+                           "prefetch_16", "prefetch_32", "prefetch_64", "prefetch_128"};
+constexpr std::array<std::size_t, 19> batch_sizes{0, 0, 0, 1, 2, 4, 8, 16, 32, 64, 128, 1, 2, 4, 8, 16, 32, 64, 128};
 
+template<bool ComparePrefetch>
 void run(const workloads::Keys& keys, const std::string& dataset, const std::string& pattern)
 {
+  constexpr std::size_t method_count = ComparePrefetch ? 19 : 11;
+  constexpr std::size_t trials = ComparePrefetch ? 12 : 11;
   const auto queries = workloads::make_queries(keys, query_count, pattern, 20261116);
   const auto build_start = Clock::now();
   const sst::STree<> tree(keys);
@@ -68,6 +74,30 @@ void run(const workloads::Keys& keys, const std::string& dataset, const std::str
       case 8: measure([&] { tree.lower_bound_batch<32>(queries, output); }, method, trial); break;
       case 9: measure([&] { tree.lower_bound_batch<64>(queries, output); }, method, trial); break;
       case 10: measure([&] { tree.lower_bound_batch<128>(queries, output); }, method, trial); break;
+      case 11:
+        if constexpr (ComparePrefetch) measure([&] { tree.lower_bound_batch_prefetch<1>(queries, output); }, method, trial);
+        break;
+      case 12:
+        if constexpr (ComparePrefetch) measure([&] { tree.lower_bound_batch_prefetch<2>(queries, output); }, method, trial);
+        break;
+      case 13:
+        if constexpr (ComparePrefetch) measure([&] { tree.lower_bound_batch_prefetch<4>(queries, output); }, method, trial);
+        break;
+      case 14:
+        if constexpr (ComparePrefetch) measure([&] { tree.lower_bound_batch_prefetch<8>(queries, output); }, method, trial);
+        break;
+      case 15:
+        if constexpr (ComparePrefetch) measure([&] { tree.lower_bound_batch_prefetch<16>(queries, output); }, method, trial);
+        break;
+      case 16:
+        if constexpr (ComparePrefetch) measure([&] { tree.lower_bound_batch_prefetch<32>(queries, output); }, method, trial);
+        break;
+      case 17:
+        if constexpr (ComparePrefetch) measure([&] { tree.lower_bound_batch_prefetch<64>(queries, output); }, method, trial);
+        break;
+      case 18:
+        if constexpr (ComparePrefetch) measure([&] { tree.lower_bound_batch_prefetch<128>(queries, output); }, method, trial);
+        break;
       default: throw std::runtime_error("Invalid benchmark method");
     }
   };
@@ -76,16 +106,20 @@ void run(const workloads::Keys& keys, const std::string& dataset, const std::str
   std::mt19937 rng(1147);
   std::shuffle(order.begin(), order.end(), rng);
   for (auto method : order) dispatch(method, -1);
-  // Eleven trials put every method in every run position once.
+  // Preserve historical rotation; shuffle each trial for the larger comparison.
   for (std::size_t trial = 0; trial < trials; ++trial) {
-    for (std::size_t i = 0; i < method_count; ++i) dispatch(order[(trial + i) % method_count], static_cast<int>(trial));
+    if constexpr (ComparePrefetch) std::shuffle(order.begin(), order.end(), rng);
+    for (std::size_t i = 0; i < method_count; ++i) {
+      const auto method = ComparePrefetch ? order[i] : order[(trial + i) % method_count];
+      dispatch(method, static_cast<int>(trial));
+    }
   }
   for (std::size_t method = 0; method < method_count; ++method) {
     auto sorted = samples[method];
     std::sort(sorted.begin(), sorted.end());
     std::cout << dataset << ',' << pattern << ',' << keys.size() << ',' << names[method]
               << ',' << batch_sizes[method] << ',' << queries.size() << ',' << hits << ',' << trials
-              << ',' << sorted[trials / 2] << ',' << sorted.front() << ',' << sorted.back()
+              << ',' << (sorted[(trials - 1) / 2] + sorted[trials / 2]) / 2 << ',' << sorted.front() << ',' << sorted.back()
               << ',' << checksum << ',' << (method == 0 ? keys.size() * sizeof(std::uint32_t) : tree.storage_bytes())
               << ',' << (method == 0 ? 0 : build_ms);
     for (auto sample : samples[method]) std::cout << ',' << sample;
@@ -98,34 +132,41 @@ void run(const workloads::Keys& keys, const std::string& dataset, const std::str
 
 int main(int argc, char** argv)
 try {
-  if (argc > 2) throw std::runtime_error("Usage: batch_benchmark [16mer-u32le-file]");
+  const bool compare_prefetch = argc >= 2 && std::string_view(argv[1]) == "--prefetch";
+  if (argc > (compare_prefetch ? 3 : 2)) throw std::runtime_error("Usage: batch_benchmark [--prefetch] [16mer-u32le-file]");
+  const char* dataset = argc > (compare_prefetch ? 2 : 1) ? argv[compare_prefetch ? 2 : 1] : nullptr;
+  const auto execute = [&]<bool ComparePrefetch>() {
+  constexpr std::size_t trials = ComparePrefetch ? 12 : 11;
   std::cout << std::fixed << std::setprecision(3)
       << "dataset,pattern,n,method,batch_size,queries,hits,trials,median_ns,min_ns,max_ns,checksum,storage_bytes,build_ms";
   for (std::size_t i = 0; i < trials; ++i) std::cout << ",trial_" << i << "_ns";
   std::cout << '\n';
-  if (argc == 2) {
-    const auto genome = workloads::read_keys(argv[1]);
+  if (dataset != nullptr) {
+    const auto genome = workloads::read_keys(dataset);
     for (const auto n : {std::size_t{1048576}, std::size_t{8388608}, genome.size()}) {
       if (n > genome.size()) continue;
       workloads::Keys keys(genome.begin(), genome.begin() + static_cast<std::ptrdiff_t>(n));
       std::sort(keys.begin(), keys.end());
-      for (const auto& pattern : {"mixed", "hot", "sorted"}) run(keys, "chr22_16mers", pattern);
+      for (const auto& pattern : {"mixed", "hot", "sorted"}) run<ComparePrefetch>(keys, "chr22_16mers", pattern);
     }
   } else {
     for (const auto n : {std::size_t{1024}, std::size_t{65536}, std::size_t{1048576},
                          std::size_t{8388731}, std::size_t{33554555}}) {
       const auto keys = workloads::make_keys(n, "uniform", 42);
-      for (const auto& pattern : {"mixed", "hot", "sorted"}) run(keys, "uniform", pattern);
+      for (const auto& pattern : {"mixed", "hot", "sorted"}) run<ComparePrefetch>(keys, "uniform", pattern);
     }
     for (const auto n : {std::size_t{1048576}, std::size_t{33554555}}) {
       const auto keys = workloads::make_keys(n, "clusters", 43);
-      for (const auto& pattern : {"mixed", "hot"}) run(keys, "clusters", pattern);
+      for (const auto& pattern : {"mixed", "hot"}) run<ComparePrefetch>(keys, "clusters", pattern);
     }
     const auto equal = workloads::make_keys(1048576, "equal", 44);
-    run(equal, "equal", "mixed");
+    run<ComparePrefetch>(equal, "equal", "mixed");
     const auto dense = workloads::make_keys(1048576, "dense", 45);
-    for (const auto& pattern : {"hits", "misses"}) run(dense, "dense", pattern);
+    for (const auto& pattern : {"hits", "misses"}) run<ComparePrefetch>(dense, "dense", pattern);
   }
+  };
+  if (compare_prefetch) execute.template operator()<true>();
+  else execute.template operator()<false>();
 } catch (const std::exception& error) {
   std::cerr << "FAIL: " << error.what() << '\n';
   return 1;
