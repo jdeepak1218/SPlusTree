@@ -65,7 +65,7 @@ with a non-answer marker before each pass, outside timing, to catch skipped
 writes rather than reusing a previous method's answers.
 
 All CSV coverage, raw medians/minima/maxima, hit/miss properties, and checksums
-across methods, builds, and repeats passed `tools/check_batch_results.py`.
+across methods, builds, and repeats passed the recorded CSV consistency audit.
 Negative checker fixtures with altered timing summaries and inconsistent
 checksums were rejected too. Summary output is in `batch-csv-check.txt`.
 
@@ -180,8 +180,7 @@ scaling. Prior CSV files remain untouched; compare methods within these new runs
 because query count, run order, and generated data differ from historical runs.
 
 Reproduce with `bash tools/run_validation.sh`, the two real-data validation
-commands in `stree-batching.md`, `bash tools/run_batch_benchmarks.sh`, and
-`python3 tools/check_batch_results.py`. The six `benchmarks/batch_*_real.csv` /
+commands in `stree-batching.md`, and `bash tools/run_batch_benchmarks.sh`. The six `benchmarks/batch_*_real.csv` /
 `batch_*_synthetic.csv` files retain every raw trial. Large downloaded and derived
 datasets remain ignored. The next isolated search experiment is explicit
 prefetching of the selected next-level node during the batch loop.

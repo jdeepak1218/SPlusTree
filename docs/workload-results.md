@@ -56,7 +56,7 @@ warm-up. AVX2, an independent AVX2 repeat, and generic builds produced 1,032 CSV
 rows: **1,082,130,432 measured searches plus 135,266,304 warm-up searches**.
 All **1,217,396,736 outputs** were checked individually outside the timed region.
 Repeated probes are deliberately reused between passes; these are not 1.2 billion
-unique queries. `tools/check_workload_results.py` verified coverage, raw-trial
+unique queries. The recorded CSV audit verified coverage, raw-trial
 summaries, hit/miss properties, and cross-method/build/repeat checksum agreement.
 
 Real keys are 39,159,057 consecutive valid 16-base windows from UCSC hg38

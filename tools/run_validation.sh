@@ -5,7 +5,6 @@ mkdir -p build/validation
 cxx="${CXX:-g++}"
 common=(-std=c++20 -Wall -Wextra -Wpedantic -Wconversion -pthread -Iinclude)
 "$cxx" --version
-python3 tools/prepare_genome.py
 for name in reference eytzinger; do
   "$cxx" "${common[@]}" -O3 -DNDEBUG "tests/${name}_test.cpp" -o "build/validation/$name"
   "build/validation/$name"

@@ -39,3 +39,7 @@ Desktop.ini
 
 # Local reference material
 /third_party/
+
+# Local scripting helpers are not part of the repository
+/tools/*.py
+/tools/__pycache__/

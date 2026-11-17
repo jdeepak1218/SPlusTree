@@ -60,7 +60,6 @@ bash tools/run_validation.sh
 build/validation/batch_avx2 data/chr22.u32
 ASAN_OPTIONS=detect_leaks=0 build/validation/batch_sanitized data/chr22.u32
 bash tools/run_batch_prefetch_benchmarks.sh
-python3 tools/check_batch_results.py --prefetch
 ```
 
 The full batch matrix exercises both methods: all node widths, batch sizes

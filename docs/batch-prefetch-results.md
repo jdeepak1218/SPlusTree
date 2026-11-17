@@ -148,15 +148,14 @@ the address-check code; it does not isolate the cost of one machine instruction.
 Use within-run comparisons, since the control is another process.
 
 The control covers all nine real cases and adds 171 rows, each with twelve
-measured trials and checked warm-up outputs. The CSV checker validates it when
-the optional control file exists, including agreement with the main runs.
+measured trials and checked warm-up outputs. The recorded CSV audit validated it,
+including agreement with the main runs.
 
 Reproduce the extra control after the main runner:
 
 ```bash
 g++ -std=c++20 -O3 -DNDEBUG -DSST_DISABLE_PREFETCH -Iinclude benchmarks/batch_benchmark.cpp -o build/batch_prefetch_disabled
 build/batch_prefetch_disabled --prefetch data/chr22.u32 > benchmarks/batch_prefetch_generic_disabled_real.csv
-python3 tools/check_batch_results.py --prefetch
 ```
 
 Counting can still win smaller generic workloads. The new method remains an

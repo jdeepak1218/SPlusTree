@@ -73,7 +73,6 @@ queries. Input provenance is recorded in `benchmarks/real_dataset.json`.
 
 ```bash
 bash tools/run_batch_benchmarks.sh
-python3 tools/check_batch_results.py
 ```
 
 The benchmark compares standard search, counting, individual packed search, and

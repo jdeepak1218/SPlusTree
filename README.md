@@ -2,7 +2,7 @@
 
 A C++20 index for lower-bound searches over sorted `std::uint32_t` keys.
 Copy **`include/stree.hpp`** into your project. It is self-contained and needs
-no compiled library, Python runtime, or third-party dependency.
+no compiled library or third-party dependency.
 
 ## Quick start
 
@@ -127,8 +127,7 @@ They do not need to be understood to use `sst::StaticSearchTree`.
 bash tools/run_validation.sh
 ```
 
-The development runner uses Python for dataset-fixture checks; consuming the
-header does not. It builds release configurations and sanitizer checks. See
+The runner builds the C++ release configurations and sanitizer checks. See
 [API validation](docs/simple-api.md), [search contract](docs/contract.md), and
 [measured backend results](docs/batch-prefetch-results.md). The published backend
 measurements exclude convenience-overload allocation and are not end-to-end

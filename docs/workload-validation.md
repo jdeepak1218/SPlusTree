@@ -6,7 +6,7 @@ not change the search algorithms or choose a new default implementation.
 
 ## Reproduce
 
-Requirements: C++20, GCC with x86 AVX2/POPCNT support, Bash, and Python 3.11+.
+Requirements: C++20, GCC with x86 AVX2/POPCNT support, and Bash.
 The targeted executable requires those CPU instructions. The generic executable
 does not require AVX2. Run correctness checks before benchmarking; do not run
 tests, compilation, or other benchmarks concurrently with timed measurements.
@@ -16,14 +16,14 @@ mkdir -p build
 bash tools/run_validation.sh > build/validation.log 2>&1
 ```
 
-Download and derive the real dataset once:
+For real-data benchmarks, supply `data/chr22.u32` matching the encoding and
+hashes in `benchmarks/real_dataset.json`. The prepared dataset remains available
+locally under ignored `data/`. Dataset conversion and standalone CSV audit tools
+are no longer included. The C++ benchmark executables still validate every search
+answer before reporting success.
 
 ```bash
-mkdir -p data
-curl -fL https://hgdownload.soe.ucsc.edu/goldenPath/hg38/chromosomes/chr22.fa.gz -o data/chr22.fa.gz
-python3 tools/prepare_genome.py data/chr22.fa.gz data/chr22.u32
 bash tools/run_workload_benchmarks.sh
-python3 tools/check_workload_results.py
 ```
 
 Large inputs and derived files live under ignored `data/`. The small provenance
@@ -53,9 +53,9 @@ replaces its six CSV files, so save an earlier run before comparing machines.
 - Binary-data fixtures verify byte order, zero, the unsigned sign boundary,
   maximum values, and rejection of empty, missing, or partial files. Ordered
   query generation and guaranteed hit/miss cases have their own checks.
-- The DNA encoder is checked against a separate, simple window-by-window
-  implementation, including case folding, short sequences, ambiguous bases,
-  FASTA line wrapping, sequence boundaries, and a `0xffffffff` encoded key.
+- The recorded dataset preparation audit checked the DNA encoder against a
+  separate window-by-window implementation. That historical check is not part
+  of the current C++ validation runner.
 
 Release tests cover generic code, AVX2 with hardware population count, AVX2 with
 the explicit mask backend disabled, and AVX2 with software population count.
