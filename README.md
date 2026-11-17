@@ -1,4 +1,4 @@
-# StaticSearchTree
+# SPlusTree
 
 A header-only C++20 index for lower-bound searches over static, sorted
 `std::uint32_t` keys. It supports individual and batched queries
