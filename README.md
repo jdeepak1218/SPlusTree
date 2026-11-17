@@ -40,6 +40,34 @@ g++ -std=c++20 -O3 -Iinclude examples/simple_search.cpp -o build/simple_search
 ./build/simple_search
 ```
 
+## CMake and automated checks
+
+CMake integration is optional; copying `stree.hpp` still works. With CMake 3.21+
+and a C++20 compiler, build the examples and register the correctness tests:
+
+```bash
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build --config Release --parallel 2
+ctest --test-dir build -C Release --output-on-failure --no-tests=error
+```
+
+To consume the header through CMake from an application:
+
+```cmake
+add_subdirectory(external/static-search-tree-cpp)
+target_link_libraries(my_app PRIVATE sst::static_search_tree)
+```
+
+The interface target supplies the include path and C++20 requirement. Dependency
+builds do not build this project's tests/examples by default. A top-level build
+can disable them with `-DBUILD_TESTING=OFF -DSST_BUILD_EXAMPLES=OFF`.
+
+GitHub Actions checks GCC and Clang on Linux, MSVC on Windows, and a separate
+Linux sanitizer job. Accelerated/control tests are opt-in locally through
+`-DSST_TEST_AVX2=ON` and run only after a host capability check. CI does not need
+external datasets. See the [complete line-by-line walkthrough](docs/ci.md) and
+[local validation record](docs/ci-validation.txt).
+
 ## What the results mean
 
 `lower_bound(query)` returns a `std::size_t` position in the original sorted

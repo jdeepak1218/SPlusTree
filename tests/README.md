@@ -212,3 +212,12 @@ and caller-buffer batch overloads, construction from contiguous inputs, source
 ownership, copy/move operations, duplicates, full-range keys, invalid lengths,
 empty inputs, batch tails, and concurrent reads. It is included in every release
 configuration and the sanitizer runner. See [API validation](../docs/simple-api.md).
+
+## CMake / CTest and CI
+
+The root CMake project registers all seven existing suites, the example,
+a copied-header-only test, and a two-translation-unit integration test.
+`-DSST_TEST_AVX2=ON` adds twelve backend/control tests on capable native
+GCC/Clang x86 hosts. The external consumer project independently verifies
+the public CMake target and inherited include/C++20 requirements.
+See [the CI walkthrough](../docs/ci.md) for commands and every workflow line.

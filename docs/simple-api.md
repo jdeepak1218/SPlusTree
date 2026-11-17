@@ -85,6 +85,7 @@ costs must be measured for the intended use case. The full benchmark matrix was
 not rerun for these delegating methods.
 
 This environment tested GCC 13.3 / x86 under WSL. Leak detection was disabled for
-ASan runs. ThreadSanitizer, other compilers/platforms, runtime CPU dispatch, and
-automated CI remain separate release-preparation work. The simple public API is
-complete; this does not constitute full cross-platform production qualification.
+ASan runs. ThreadSanitizer and runtime CPU dispatch remain separate
+release-preparation work. The subsequently added compiler/CI checks are described
+in [ci.md](ci.md). The simple public API is complete; this does not constitute
+full cross-platform production qualification.
