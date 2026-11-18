@@ -1,6 +1,6 @@
 # SPlusTree
 
-[![C++ CI](https://github.com/jdeepak1218/static-search-tree/actions/workflows/ci.yml/badge.svg)](https://github.com/jdeepak1218/static-search-tree/actions/workflows/ci.yml)
+[![C++ CI](https://github.com/jdeepak1218/SPlusTree/actions/workflows/ci.yml/badge.svg)](https://github.com/jdeepak1218/SPlusTree/actions/workflows/ci.yml)
 
 A header-only C++20 S+ tree for lower-bound searches over static, sorted
 `std::uint32_t` keys. It owns its keys, returns positions in sorted order, and
@@ -77,7 +77,7 @@ move operations own their storage; changing indexed keys requires rebuilding.
 To consume with CMake:
 
 ```cmake
-add_subdirectory(external/static-search-tree-cpp)
+add_subdirectory(external/SPlusTree)
 target_link_libraries(my_app PRIVATE sst::static_search_tree)
 ```
 
@@ -91,12 +91,12 @@ ctest --test-dir build -C Release --output-on-failure --no-tests=error
 
 The optional accelerated matrix has 22 tests on a supported x86 host. Add
 `-DSST_ENABLE_SANITIZERS=ON` in a separate GCC/Clang build for ASan/UBSan.
-The linked CI workflow is configured for GCC, Clang, MSVC, and sanitizers; the
-badge shows its hosted status.
+The linked CI workflow runs GCC, Clang, MSVC, and sanitizer jobs. Open the badge
+to check the latest run and individual job results, including Windows MSVC.
 
 [Design and backend details](docs/design.md) explain the layout and SIMD code.
 Historical experiment reports, validation logs, and CSVs are preserved on the
-[`results-archive` branch](https://github.com/jdeepak1218/static-search-tree/tree/results-archive) and in [the pre-cleanup revision](https://github.com/jdeepak1218/static-search-tree/tree/b11610eda455449983d5e93c52f9705ee45dec80).
+[`results-archive` branch](https://github.com/jdeepak1218/SPlusTree/tree/results-archive) and in [the pre-cleanup revision](https://github.com/jdeepak1218/SPlusTree/tree/b11610eda455449983d5e93c52f9705ee45dec80).
 
 ## Background and license
 

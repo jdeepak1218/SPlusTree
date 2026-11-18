@@ -60,8 +60,8 @@ Eytzinger throughput in both runs. Both indexes return sorted positions;
 Eytzinger retains a position map and its storage cost is included in the CSV.
 These ratios exclude construction and output allocation.
 
-[First-run raw data](https://github.com/jdeepak1218/static-search-tree/blob/results-archive/results/library-polish/comparison-avx2-real.csv)
-and [repeat raw data](https://github.com/jdeepak1218/static-search-tree/blob/results-archive/results/library-polish/comparison-avx2-repeat-real.csv)
+[First-run raw data](https://github.com/jdeepak1218/SPlusTree/blob/results-archive/results/library-polish/comparison-avx2-real.csv)
+and [repeat raw data](https://github.com/jdeepak1218/SPlusTree/blob/results-archive/results/library-polish/comparison-avx2-repeat-real.csv)
 are stored on `results-archive`, alongside the historical experiment files.
 Both CSVs contain all 20 methods across three input sizes and three query patterns.
 All 613,431,000 warm-up/measured outputs were checked. CSV method coverage,
@@ -71,7 +71,7 @@ The runs used GCC 13.3, `-O3 -DNDEBUG -mavx2 -mpopcnt`, on an i7-12700H
 under WSL2. They had no affinity, frequency lock, explicit huge pages, or cold-cache
 control. They measure throughput on resident data. Nearby methods can have
 overlapping trial ranges. Historical raw CSVs and reports remain available in
-[revision b11610e](https://github.com/jdeepak1218/static-search-tree/tree/b11610eda455449983d5e93c52f9705ee45dec80/benchmarks).
+[revision b11610e](https://github.com/jdeepak1218/SPlusTree/tree/b11610eda455449983d5e93c52f9705ee45dec80/benchmarks).
 
 On native Linux, use `lscpu -e` and the host's CPU topology to identify a P-core,
 then run `taskset -c <cpu> ./build/batch_benchmark --prefetch ...`. WSL2 exposes
